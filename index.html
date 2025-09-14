@@ -3,94 +3,105 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance SV Daily Growth (Shared)</title>
+    <title>Alliance SV Daily Growth (Private)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // =========================================================================
-        // === CRITICAL: YOU MUST REPLACE THE CONFIGURATION BELOW ===
-        // The error `auth/api-key-not-valid` means these keys are incorrect.
-        // Follow these steps to get your unique Firebase configuration:
-        // Step 1: Go to the Firebase Console at https://console.firebase.google.com
-        // Step 2: Create a new project or select an existing one.
-        // Step 3: From the project overview, click "Add app" and choose the web icon (</>).
-        // Step 4: Follow the instructions and copy the `firebaseConfig` object.
-        // Step 5: Paste your `firebaseConfig` object here, replacing the placeholder values below.
-        // Remember to set up your Firestore security rules to allow anonymous reads and writes.
-        // =========================================================================
-        const firebaseConfig = {
-            apiKey: "AIzaSyAxr2mBPCHZnUKIVE3rYG-iQCLoXQ0HC_Q",
-            authDomain: "sv-alliance-growth.firebaseapp.com",
-            projectId: "sv-alliance-growth",
-            storageBucket: "sv-alliance-growth.firebasestorage.app",
-            messagingSenderId: "370137693484",
-            appId: "1:370137693484:web:481d535ff4a82adb19c089"
-        };
-        // END OF CONFIGURATION
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         let growthChart;
         let data = [];
         let dataListener;
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
 
         document.addEventListener('DOMContentLoaded', async function() {
             setLogLevel('debug');
-            document.getElementById('modeDisplay').textContent = 'Mode: Shared (Cloud)';
+            document.getElementById('modeDisplay').textContent = 'Mode: Private';
             
             // Initialize Firebase
+            if (!firebaseConfig.apiKey) {
+                showDialog("Firebase configuration is missing. Please check your setup.");
+                return;
+            }
             const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
-            const auth = getAuth(app);
-            let userId = null;
-            let isAuthReady = false;
+            db = getFirestore(app);
+            auth = getAuth(app);
 
-            const maxRetries = 3;
-            let retryCount = 0;
+            const authContainer = document.getElementById('authContainer');
+            const mainContent = document.getElementById('main-content');
+            const signInForm = document.getElementById('signInForm');
+            const signUpForm = document.getElementById('signUpForm');
+            const svForm = document.getElementById('svForm');
 
-            const attemptSignIn = async () => {
-                try {
-                    await signInAnonymously(auth);
-                } catch (error) {
-                    console.error("Firebase sign-in error:", error);
-                    if (error.code === 'auth/configuration-not-found') {
-                        showDialog("Error: Anonymous authentication is not enabled. Go to your Firebase project, click 'Authentication' -> 'Sign-in method', and enable 'Anonymous'.");
-                    } else if (error.code === 'auth/network-request-failed' && retryCount < maxRetries) {
-                        retryCount++;
-                        const delay = 2000 * retryCount;
-                        console.log(`Network request failed. Retrying in ${delay / 1000} seconds...`);
-                        showDialog(`Network error. Retrying... (${retryCount}/${maxRetries})`);
-                        setTimeout(attemptSignIn, delay);
-                    } else {
-                        showDialog(`An unexpected error occurred: ${error.message}. Please check your internet connection or try again later.`);
-                    }
-                }
-            };
-            
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid;
                     isAuthReady = true;
                     document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                    listenForDataChanges(db);
+                    authContainer.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    listenForDataChanges();
                 } else {
                     isAuthReady = false;
                     userId = null;
                     document.getElementById('userIdDisplay').textContent = '';
-                    // Only show this dialog if it's a persistent issue after retries
-                    if (retryCount >= maxRetries) {
-                        showDialog("Authentication failed. Please try again.");
+                    authContainer.classList.remove('hidden');
+                    mainContent.classList.add('hidden');
+                    if (dataListener) {
+                        dataListener();
                     }
                 }
             });
 
-            // Start the sign-in attempt
-            attemptSignIn();
+            // Handle custom token sign-in
+            if (initialAuthToken) {
+                 try {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } catch (error) {
+                    console.error("Firebase custom token sign-in error:", error);
+                    showDialog(`An unexpected error occurred during sign-in: ${error.message}. Please check your internet connection or try again later.`);
+                }
+            }
+            
+            signInForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const email = signInForm['signInEmail'].value;
+                const password = signInForm['signInPassword'].value;
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    console.error("Sign-in error:", error);
+                    showDialog(`Sign-in failed: ${error.message}`);
+                }
+            });
 
-            document.getElementById('svForm').addEventListener('submit', async function(e) {
+            signUpForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const email = signUpForm['signUpEmail'].value;
+                const password = signUpForm['signUpPassword'].value;
+                try {
+                    await createUserWithEmailAndPassword(auth, email, password);
+                } catch (error) {
+                    console.error("Sign-up error:", error);
+                    showDialog(`Sign-up failed: ${error.message}`);
+                }
+            });
+
+            document.getElementById('signOutButton').addEventListener('click', async () => {
+                await signOut(auth);
+            });
+
+            svForm.addEventListener('submit', async function(e) {
                 e.preventDefault();
                 if (!isAuthReady) {
                     showDialog("Authentication not ready. Please wait.");
@@ -113,7 +124,7 @@
                 };
 
                 try {
-                    const growthCollectionRef = collection(db, `public/data/sv_growth_data`);
+                    const growthCollectionRef = collection(db, `users/${userId}/sv_growth_data`);
                     await addDoc(growthCollectionRef, newDataPoint);
                     svInput.value = '';
                 } catch (error) {
@@ -122,13 +133,17 @@
                 }
             });
 
-            window.deleteDataPoint = async (id) => {
+            window.deleteDataPoint = async (id, dataUserId) => {
                 try {
                     if (!isAuthReady) {
                         showDialog("Authentication not ready. Please wait.");
                         return;
                     }
-                    await deleteDoc(doc(db, `public/data/sv_growth_data`, id));
+                    if (userId !== dataUserId) {
+                        showDialog("You can only delete your own entries.");
+                        return;
+                    }
+                    await deleteDoc(doc(db, `users/${userId}/sv_growth_data`, id));
                 } catch (error) {
                     console.error("Error deleting document: ", error);
                     showDialog("Error deleting data. Please try again.");
@@ -136,8 +151,8 @@
             };
         });
 
-        function listenForDataChanges(db) {
-            const growthCollectionRef = collection(db, `public/data/sv_growth_data`);
+        function listenForDataChanges() {
+            const growthCollectionRef = collection(db, `users/${userId}/sv_growth_data`);
             const q = query(growthCollectionRef);
 
             if (dataListener) {
@@ -154,7 +169,7 @@
                 renderChart(data);
             }, (error) => {
                 console.error("Error fetching data: ", error);
-                showDialog("Failed to load data. Please check your connection.");
+                showDialog("Failed to load data. Please check your connection and ensure your rules are correct.");
             });
         }
 
@@ -184,7 +199,7 @@
                     <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     <td class="px-6 py-4">
-                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
+                        <button onclick="deleteDataPoint('${item.id}', '${item.userId}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
                             Delete
                         </button>
                     </td>
@@ -192,7 +207,6 @@
                 tableBody.appendChild(row);
             });
             
-            // Calculate and display average growth
             if (dataToRender.length > 1) {
                 const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
                 const averageGrowth = totalGrowth / (dataToRender.length - 1);
@@ -297,19 +311,33 @@
 <body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
     <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Shared)</h1>
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Private)</h1>
             <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
         </header>
 
-        <main id="main-content">
-            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                <p class="text-sm font-medium text-indigo-700">How to use:</p>
-                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
-                    <li>Enter the daily SV in the field below.</li>
-                    <li>Click 'Add Day' to save the data.</li>
-                    <li>The chart and table will update automatically.</li>
-                    <li>Click 'Delete' next to any entry to remove it.</li>
-                </ol>
+        <div id="authContainer" class="flex flex-col items-center justify-center p-6 space-y-6">
+            <div class="w-full max-w-sm p-6 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-2xl font-semibold text-center text-gray-800 mb-4">Sign In</h2>
+                <form id="signInForm" class="space-y-4">
+                    <input type="email" id="signInEmail" placeholder="Email" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <input type="password" id="signInPassword" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <button type="submit" class="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">Sign In</button>
+                </form>
+            </div>
+            <div class="w-full max-w-sm p-6 bg-gray-50 rounded-lg shadow-sm border border-gray-200">
+                <h2 class="text-2xl font-semibold text-center text-gray-800 mb-4">Sign Up</h2>
+                <form id="signUpForm" class="space-y-4">
+                    <input type="email" id="signUpEmail" placeholder="Email" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <input type="password" id="signUpPassword" placeholder="Password" class="w-full p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <button type="submit" class="w-full px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">Sign Up</button>
+                </form>
+            </div>
+        </div>
+
+        <main id="main-content" class="hidden">
+            <div class="flex justify-between items-center mb-6">
+                <p class="text-sm font-medium text-gray-500">Enter your daily SV to begin.</p>
+                <button id="signOutButton" class="px-4 py-2 text-sm bg-red-500 text-white rounded-lg shadow-md hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-500">Sign Out</button>
             </div>
 
             <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
@@ -346,7 +374,7 @@
             </div>
 
             <footer class="mt-8 text-center text-xs text-gray-400">
-                Data is stored in a shared cloud database.
+                Data is stored in a private cloud database.
             </footer>
         </main>
     </div>
@@ -359,6 +387,7 @@
     </div>
 </body>
 </html>
+
 
 
 
