@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alliance SV Daily Growth (Shared)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        setLogLevel('debug');
+        
+        // Firebase configuration variables from the environment
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db, auth, userId;
+        let growthChart;
+        let isAuthReady = false;
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            try {
+                // Initialize Firebase
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                // Sign in with the provided custom token or anonymously
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        isAuthReady = true;
+                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+                        // Now that we are authenticated, start listening for data
+                        listenForDataChanges();
+                    } else {
+                        // User is signed out
+                        isAuthReady = false;
+                        userId = null;
+                        document.getElementById('userIdDisplay').textContent = '';
+                        showDialog("Authentication failed. Please try again.");
+                    }
+                });
+
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                
+                document.getElementById('svForm').addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    if (!isAuthReady) {
+                        showDialog("Authentication not ready. Please wait.");
+                        return;
+                    }
+
+                    const svInput = document.getElementById('svInput');
+                    const sv = parseFloat(svInput.value);
+
+                    if (isNaN(sv) || sv <= 0) {
+                        showDialog("Please enter a valid positive number for the SV.");
+                        return;
+                    }
+
+                    const newDataPoint = {
+                        sv: sv,
+                        date: new Date().toISOString(),
+                        userId: userId,
+                        timestamp: Date.now()
+                    };
+
+                    try {
+                        const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                        await addDoc(growthCollectionRef, newDataPoint);
+                        svInput.value = '';
+                    } catch (error) {
+                        console.error("Error adding document: ", error);
+                        showDialog("Error saving data. Please try again.");
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase initialization or authentication failed: ", error);
+                showDialog("Firebase is not available. This app requires a hosted environment.");
+            }
+        });
+
+        function listenForDataChanges() {
+            const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+            const q = query(growthCollectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                const data = [];
+                snapshot.forEach((doc) => {
+                    data.push({ id: doc.id, ...doc.data() });
+                });
+                // Sort by timestamp to ensure chronological order
+                data.sort((a, b) => a.timestamp - b.timestamp);
+                renderTable(data);
+                renderChart(data);
+            }, (error) => {
+                console.error("Error fetching data: ", error);
+                showDialog("Failed to load data. Please check your connection.");
+            });
+        }
+
+        async function deleteDataPoint(id) {
+            try {
+                if (!isAuthReady) {
+                    showDialog("Authentication not ready. Please wait.");
+                    return;
+                }
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+            } catch (error) {
+                console.error("Error deleting document: ", error);
+                showDialog("Error deleting data. Please try again.");
+            }
+        }
+
+        function renderTable(data) {
+            const tableBody = document.getElementById('dataTableBody');
+            tableBody.innerHTML = '';
+            const averageGrowthDiv = document.getElementById('averageGrowth');
+            
+            const dataWithGrowth = data.map((item, index, array) => {
+                let growth = 0;
+                if (index > 0) {
+                    const prevSv = array[index - 1].sv;
+                    growth = ((item.sv - prevSv) / prevSv) * 100;
+                }
+                return { ...item, growth_percentage: growth };
+            });
+
+            dataWithGrowth.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
+                const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
+
+                row.innerHTML = `
+                    <td class="px-6 py-4">${index + 1}</td>
+                    <td class="px-6 py-4">${new Date(item.date).toLocaleDateString()}</td>
+                    <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
+                    <td class="px-6 py-4">
+                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
+                            Delete
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            // Calculate and display average growth
+            if (data.length > 1) {
+                const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
+                const averageGrowth = totalGrowth / (data.length - 1);
+                averageGrowthDiv.textContent = `Average Daily Growth: ${averageGrowth.toFixed(2)}%`;
+                averageGrowthDiv.classList.remove('hidden');
+            } else {
+                averageGrowthDiv.classList.add('hidden');
+            }
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            const labels = data.map(item => new Date(item.date).toLocaleDateString());
+            const svValues = data.map(item => item.sv);
+
+            if (growthChart) {
+                growthChart.destroy();
+            }
+
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Share Value (SV)',
+                        data: svValues,
+                        borderColor: 'rgb(79, 70, 229)',
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'SV'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showDialog(message) {
+            const dialog = document.getElementById('messageDialog');
+            const dialogMessage = document.getElementById('dialogMessage');
+            dialogMessage.textContent = message;
+            dialog.classList.remove('hidden');
+            setTimeout(() => {
+                dialog.classList.add('hidden');
+            }, 3000);
+        }
+    </script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        
+        .dialog-box {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: fadeInOut 3s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
+    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Shared)</h1>
+            <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
+        </header>
+
+        <main id="main-content">
+            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                <p class="text-sm font-medium text-indigo-700">How to use:</p>
+                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
+                    <li>Enter the daily SV in the field below.</li>
+                    <li>Click 'Add Day' to save the data.</li>
+                    <li>The chart and table will update automatically.</li>
+                    <li>Click 'Delete' next to any entry to remove it.</li>
+                </ol>
+            </div>
+
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
+                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    Add Day
+                </button>
+            </form>
+
+            <div class="chart-container mb-8 border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+                <canvas id="growthChart"></canvas>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Historical Data</h2>
+            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
+                <!-- Average growth will be displayed here -->
+            </div>
+
+            <footer class="mt-8 text-center text-xs text-gray-400">
+                Data is stored in a shared cloud database.
+            </footer>
+        </main>
+    </div>
+    <div class="fixed top-2 left-2 text-xs text-gray-400" id="userIdDisplay"></div>
+
+    <!-- Custom Dialog for Messages -->
+    <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
+        <p id="dialogMessage"></p>
+    </div>
+</body>
+</html>
