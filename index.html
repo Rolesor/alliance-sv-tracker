@@ -101,7 +101,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, orderBy, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
@@ -155,15 +155,19 @@
 
                 // Once authenticated, proceed with Firestore operations
                 const dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-                const q = query(dataCollection, orderBy("timestamp", "desc"));
+                const q = query(dataCollection);
                 
                 // Listen for real-time changes to the data
                 onSnapshot(q, (querySnapshot) => {
                     const fetchedData = [];
                     querySnapshot.forEach((doc) => {
-                        fetchedData.unshift({ ...doc.data(), id: doc.id });
+                        fetchedData.push({ ...doc.data(), id: doc.id });
                     });
+                    
+                    // Sort the data in-memory by timestamp
+                    fetchedData.sort((a, b) => a.timestamp - b.timestamp);
                     data = fetchedData;
+                    
                     renderTable(data, ownerAccess);
                     renderChart(data);
                 }, (error) => {
@@ -222,7 +226,6 @@
                         showDialog("Error deleting data. Check console for details.");
                     }
                 };
-
             });
 
         } catch (error) {
@@ -334,3 +337,4 @@
     </script>
 </body>
 </html>
+
