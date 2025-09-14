@@ -137,14 +137,18 @@
         }
 
         try {
+            console.log("Firebase config is:", firebaseConfig); // Debugging line
             if (Object.keys(firebaseConfig).length === 0) {
-                throw new Error("Firebase config is missing.");
+                console.error("Firebase config is missing.");
+                showDialog("Firebase config is missing. Please check the environment setup.");
             }
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
+            console.log("Firebase initialized successfully."); // Debugging line
 
             onAuthStateChanged(auth, async (user) => {
+                console.log("Auth state changed. User:", user ? user.uid : "anonymous"); // Debugging line
                 if (!user) {
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
@@ -155,6 +159,7 @@
                 
                 if (!isAuthReady && auth.currentUser) {
                     isAuthReady = true;
+                    console.log("Authentication is ready. Setting up Firestore listener."); // Debugging line
                     dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
                     const q = query(dataCollection);
 
@@ -346,5 +351,6 @@
     </script>
 </body>
 </html>
+
 
 
