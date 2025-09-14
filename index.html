@@ -12,34 +12,37 @@
         import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        setLogLevel('debug');
-        
-        // Firebase configuration variables from the environment
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        // Check for Firebase environment variables to determine local or shared mode
+        const isSharedMode = typeof __firebase_config !== 'undefined' && Object.keys(JSON.parse(__firebase_config)).length > 0;
 
-        let db, auth, userId;
         let growthChart;
-        let isAuthReady = false;
+        let data = [];
+        let dataListener;
 
         document.addEventListener('DOMContentLoaded', async function() {
-            try {
-                // Initialize Firebase
+            // Display a message based on the mode
+            document.getElementById('modeDisplay').textContent = isSharedMode ? 'Mode: Shared (Cloud)' : 'Mode: Local (Browser)';
+            
+            if (isSharedMode) {
+                // Initialize Firebase and setup listeners for shared mode
+                setLogLevel('debug');
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                const firebaseConfig = JSON.parse(__firebase_config);
+                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
                 const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                
-                // Sign in with the provided custom token or anonymously
+                const db = getFirestore(app);
+                const auth = getAuth(app);
+                let userId = null;
+                let isAuthReady = false;
+
                 onAuthStateChanged(auth, async (user) => {
                     if (user) {
                         userId = user.uid;
                         isAuthReady = true;
                         document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        // Now that we are authenticated, start listening for data
-                        listenForDataChanges();
+                        listenForDataChanges(db, appId);
                     } else {
-                        // User is signed out
                         isAuthReady = false;
                         userId = null;
                         document.getElementById('userIdDisplay').textContent = '';
@@ -52,7 +55,7 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-                
+
                 document.getElementById('svForm').addEventListener('submit', async function(e) {
                     e.preventDefault();
                     if (!isAuthReady) {
@@ -85,22 +88,63 @@
                     }
                 });
 
-            } catch (error) {
-                console.error("Firebase initialization or authentication failed: ", error);
-                showDialog("Firebase is not available. This app requires a hosted environment.");
+                window.deleteDataPoint = async (id) => {
+                    try {
+                        if (!isAuthReady) {
+                            showDialog("Authentication not ready. Please wait.");
+                            return;
+                        }
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                    } catch (error) {
+                        console.error("Error deleting document: ", error);
+                        showDialog("Error deleting data. Please try again.");
+                    }
+                };
+
+            } else {
+                // Setup for local mode using localStorage
+                loadDataFromLocalStorage();
+                document.getElementById('svForm').addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    const svInput = document.getElementById('svInput');
+                    const sv = parseFloat(svInput.value);
+
+                    if (isNaN(sv) || sv <= 0) {
+                        showDialog("Please enter a valid positive number for the SV.");
+                        return;
+                    }
+
+                    const newDataPoint = {
+                        sv: sv,
+                        date: new Date().toISOString(),
+                        id: crypto.randomUUID(),
+                        timestamp: Date.now()
+                    };
+                    data.push(newDataPoint);
+                    saveDataToLocalStorage();
+                    svInput.value = '';
+                });
+
+                window.deleteDataPoint = (id) => {
+                    data = data.filter(item => item.id !== id);
+                    saveDataToLocalStorage();
+                };
             }
         });
 
-        function listenForDataChanges() {
+        function listenForDataChanges(db, appId) {
             const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
             const q = query(growthCollectionRef);
 
-            onSnapshot(q, (snapshot) => {
-                const data = [];
+            if (dataListener) {
+                dataListener();
+            }
+
+            dataListener = onSnapshot(q, (snapshot) => {
+                data = [];
                 snapshot.forEach((doc) => {
                     data.push({ id: doc.id, ...doc.data() });
                 });
-                // Sort by timestamp to ensure chronological order
                 data.sort((a, b) => a.timestamp - b.timestamp);
                 renderTable(data);
                 renderChart(data);
@@ -110,25 +154,27 @@
             });
         }
 
-        async function deleteDataPoint(id) {
-            try {
-                if (!isAuthReady) {
-                    showDialog("Authentication not ready. Please wait.");
-                    return;
-                }
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-            } catch (error) {
-                console.error("Error deleting document: ", error);
-                showDialog("Error deleting data. Please try again.");
+        function loadDataFromLocalStorage() {
+            const storedData = localStorage.getItem('sv_growth_data');
+            if (storedData) {
+                data = JSON.parse(storedData);
             }
+            renderTable(data);
+            renderChart(data);
         }
 
-        function renderTable(data) {
+        function saveDataToLocalStorage() {
+            localStorage.setItem('sv_growth_data', JSON.stringify(data));
+            renderTable(data);
+            renderChart(data);
+        }
+
+        function renderTable(dataToRender) {
             const tableBody = document.getElementById('dataTableBody');
             tableBody.innerHTML = '';
             const averageGrowthDiv = document.getElementById('averageGrowth');
             
-            const dataWithGrowth = data.map((item, index, array) => {
+            const dataWithGrowth = dataToRender.map((item, index, array) => {
                 let growth = 0;
                 if (index > 0) {
                     const prevSv = array[index - 1].sv;
@@ -158,9 +204,9 @@
             });
             
             // Calculate and display average growth
-            if (data.length > 1) {
+            if (dataToRender.length > 1) {
                 const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
-                const averageGrowth = totalGrowth / (data.length - 1);
+                const averageGrowth = totalGrowth / (dataToRender.length - 1);
                 averageGrowthDiv.textContent = `Average Daily Growth: ${averageGrowth.toFixed(2)}%`;
                 averageGrowthDiv.classList.remove('hidden');
             } else {
@@ -168,10 +214,10 @@
             }
         }
 
-        function renderChart(data) {
+        function renderChart(dataToRender) {
             const ctx = document.getElementById('growthChart').getContext('2d');
-            const labels = data.map(item => new Date(item.date).toLocaleDateString());
-            const svValues = data.map(item => item.sv);
+            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
+            const svValues = dataToRender.map(item => item.sv);
 
             if (growthChart) {
                 growthChart.destroy();
@@ -316,6 +362,7 @@
         </main>
     </div>
     <div class="fixed top-2 left-2 text-xs text-gray-400" id="userIdDisplay"></div>
+    <div class="fixed top-2 right-2 text-xs text-gray-400 font-bold" id="modeDisplay"></div>
 
     <!-- Custom Dialog for Messages -->
     <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
@@ -323,3 +370,4 @@
     </div>
 </body>
 </html>
+
