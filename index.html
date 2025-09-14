@@ -1,14 +1,85 @@
-<!DOCTYPE html>
+<<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance SV Daily Growth (Local)</title>
+    <title>Alliance SV Daily Growth (Public/Shared)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
-    <script>
+</head>
+<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
+    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Public/Shared)</h1>
+            <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
+        </header>
+        <main id="main-content">
+            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                <p class="text-sm font-medium text-indigo-700">How to use:</p>
+                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
+                    <li>This is a public, shared version of the app. Anyone with the link can add, view, and delete data.</li>
+                    <li>Enter the daily SV in the field below.</li>
+                    <li>The chart and table will update automatically in real time for everyone using the app.</li>
+                </ol>
+            </div>
+
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
+                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    Add Day
+                </button>
+            </form>
+
+            <div class="chart-container mb-8 border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+                <canvas id="growthChart"></canvas>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Historical Data</h2>
+            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
+                <!-- Average growth will be displayed here -->
+            </div>
+
+            <footer class="mt-8 text-center text-xs text-gray-400">
+                Data is stored in a public, shared cloud database.
+            </footer>
+        </main>
+    </div>
+
+    <!-- Custom Dialog for Messages -->
+    <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
+        <p id="dialogMessage"></p>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, orderBy, query, limit, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Firebase Global Variables
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const __initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
         let growthChart;
         let data = [];
+        let db, auth;
 
         function showDialog(message) {
             const dialog = document.getElementById('messageDialog');
@@ -21,60 +92,71 @@
         }
 
         document.addEventListener('DOMContentLoaded', async function() {
-            // Setup for local mode using localStorage
-            loadDataFromLocalStorage();
-            document.getElementById('svForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const svInput = document.getElementById('svInput');
-                const sv = parseFloat(svInput.value);
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                
+                // Sign in anonymously to get an auth token for the public collection rules.
+                await signInAnonymously(auth);
 
-                if (isNaN(sv) || sv <= 0) {
-                    showDialog("Please enter a valid positive number for the SV.");
-                    return;
-                }
+                const dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                const q = query(dataCollection, orderBy("timestamp", "desc"));
+                
+                // Listen for real-time changes to the data
+                onSnapshot(q, (querySnapshot) => {
+                    const fetchedData = [];
+                    querySnapshot.forEach((doc) => {
+                        fetchedData.unshift({ ...doc.data(), id: doc.id });
+                    });
+                    data = fetchedData;
+                    renderTable(data);
+                    renderChart(data);
+                }, (error) => {
+                    console.error("Error fetching data: ", error);
+                    showDialog("Error loading data. Check console for details.");
+                });
 
-                const newDataPoint = {
-                    sv: sv,
-                    date: new Date().toISOString(),
-                    id: crypto.randomUUID(),
-                    timestamp: Date.now()
+                document.getElementById('svForm').addEventListener('submit', async function(e) {
+                    e.preventDefault();
+                    const svInput = document.getElementById('svInput');
+                    const sv = parseFloat(svInput.value);
+
+                    if (isNaN(sv) || sv <= 0) {
+                        showDialog("Please enter a valid positive number for the SV.");
+                        return;
+                    }
+
+                    const newDataPoint = {
+                        sv: sv,
+                        date: new Date().toISOString(),
+                        timestamp: Date.now()
+                    };
+
+                    try {
+                        await addDoc(dataCollection, newDataPoint);
+                        svInput.value = '';
+                    } catch (e) {
+                        console.error("Error adding document: ", e);
+                        showDialog("Error adding data. Check console for details.");
+                    }
+                });
+                
+                window.deleteDataPoint = async (id) => {
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                        showDialog("Entry deleted successfully.");
+                    } catch (e) {
+                        console.error("Error deleting document: ", e);
+                        showDialog("Error deleting data. Check console for details.");
+                    }
                 };
-                data.push(newDataPoint);
-                saveDataToLocalStorage();
-                svInput.value = '';
-            });
 
-            window.deleteDataPoint = (id) => {
-                data = data.filter(item => item.id !== id);
-                saveDataToLocalStorage();
-            };
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showDialog("Error initializing Firebase. Please check the console.");
+            }
         });
-
-        function loadDataFromLocalStorage() {
-            try {
-                const storedData = localStorage.getItem('sv_growth_data');
-                if (storedData) {
-                    data = JSON.parse(storedData);
-                }
-            } catch (error) {
-                console.error("Error loading data from local storage:", error);
-                showDialog("Error loading data. It may be corrupted.");
-                data = []; // Reset data to avoid further issues
-            }
-            renderTable(data);
-            renderChart(data);
-        }
-
-        function saveDataToLocalStorage() {
-            try {
-                localStorage.setItem('sv_growth_data', JSON.stringify(data));
-            } catch (error) {
-                console.error("Error saving data to local storage:", error);
-                showDialog("Error saving data. Your browser may be in private mode or has exceeded its storage limit.");
-            }
-            renderTable(data);
-            renderChart(data);
-        }
 
         function renderTable(dataToRender) {
             const tableBody = document.getElementById('dataTableBody');
@@ -95,10 +177,11 @@
                 row.className = 'bg-white border-b hover:bg-gray-50';
                 const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
                 const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
+                const formattedDate = new Date(item.date).toLocaleDateString();
 
                 row.innerHTML = `
                     <td class="px-6 py-4">${index + 1}</td>
-                    <td class="px-6 py-4">${new Date(item.date).toLocaleDateString()}</td>
+                    <td class="px-6 py-4">${formattedDate}</td>
                     <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     <td class="px-6 py-4">
@@ -201,70 +284,7 @@
             100% { opacity: 0; transform: translateY(-20px); }
         }
     </style>
-</head>
-<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
-    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
-        <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Local)</h1>
-            <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
-        </header>
-
-        <main id="main-content">
-            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                <p class="text-sm font-medium text-indigo-700">How to use:</p>
-                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
-                    <li>Enter the daily SV in the field below.</li>
-                    <li>Click 'Add Day' to save the data.</li>
-                    <li>The chart and table will update automatically.</li>
-                    <li>Click 'Delete' next to any entry to remove it.</li>
-                </ol>
-            </div>
-
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
-                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
-                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                    Add Day
-                </button>
-            </form>
-
-            <div class="chart-container mb-8 border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
-                <canvas id="growthChart"></canvas>
-            </div>
-
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Historical Data</h2>
-            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
-                        <!-- Data will be dynamically inserted here -->
-                    </tbody>
-                </table>
-            </div>
-            
-            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
-                <!-- Average growth will be displayed here -->
-            </div>
-
-            <footer class="mt-8 text-center text-xs text-gray-400">
-                Data is stored in your browser's local storage.
-            </footer>
-        </main>
-    </div>
-
-    <!-- Custom Dialog for Messages -->
-    <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
-        <p id="dialogMessage"></p>
-    </div>
 </body>
 </html>
-
 
 
