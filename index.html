@@ -24,12 +24,12 @@
         // Remember to set up your Firestore security rules to allow anonymous reads and writes.
         // =========================================================================
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyAxr2mBPCHZnUKIVE3rYG-iQCLoXQ0HC_Q",
+            authDomain: "sv-alliance-growth.firebaseapp.com",
+            projectId: "sv-alliance-growth",
+            storageBucket: "sv-alliance-growth.firebasestorage.app",
+            messagingSenderId: "370137693484",
+            appId: "1:370137693484:web:481d535ff4a82adb19c089"
         };
         // END OF CONFIGURATION
 
@@ -48,6 +48,28 @@
             let userId = null;
             let isAuthReady = false;
 
+            const maxRetries = 3;
+            let retryCount = 0;
+
+            const attemptSignIn = async () => {
+                try {
+                    await signInAnonymously(auth);
+                } catch (error) {
+                    console.error("Firebase sign-in error:", error);
+                    if (error.code === 'auth/configuration-not-found') {
+                        showDialog("Error: Anonymous authentication is not enabled. Go to your Firebase project, click 'Authentication' -> 'Sign-in method', and enable 'Anonymous'.");
+                    } else if (error.code === 'auth/network-request-failed' && retryCount < maxRetries) {
+                        retryCount++;
+                        const delay = 2000 * retryCount;
+                        console.log(`Network request failed. Retrying in ${delay / 1000} seconds...`);
+                        showDialog(`Network error. Retrying... (${retryCount}/${maxRetries})`);
+                        setTimeout(attemptSignIn, delay);
+                    } else {
+                        showDialog(`An unexpected error occurred: ${error.message}. Please check your internet connection or try again later.`);
+                    }
+                }
+            };
+            
             onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     userId = user.uid;
@@ -58,17 +80,15 @@
                     isAuthReady = false;
                     userId = null;
                     document.getElementById('userIdDisplay').textContent = '';
-                    showDialog("Authentication failed. Please try again.");
+                    // Only show this dialog if it's a persistent issue after retries
+                    if (retryCount >= maxRetries) {
+                        showDialog("Authentication failed. Please try again.");
+                    }
                 }
             });
 
-            // Sign in anonymously to access the database
-            try {
-                await signInAnonymously(auth);
-            } catch (error) {
-                console.error("Firebase sign-in error:", error);
-                showDialog("Error: Firebase API key is not valid. Please update firebaseConfig with your project's keys.");
-            }
+            // Start the sign-in attempt
+            attemptSignIn();
 
             document.getElementById('svForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
