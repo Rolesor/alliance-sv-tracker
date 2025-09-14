@@ -1,4 +1,4 @@
-!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -139,18 +139,19 @@
 
         try {
             setLogLevel('debug');
-            console.log("Firebase config is:", firebaseConfig); // Debugging line
+            console.log("Firebase config is:", firebaseConfig); 
             if (Object.keys(firebaseConfig).length === 0) {
                 console.error("Firebase config is missing.");
                 showDialog("Firebase config is missing. Please check the environment setup.");
             }
+            
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            console.log("Firebase initialized successfully."); // Debugging line
+            console.log("Firebase initialized successfully.");
 
             onAuthStateChanged(auth, async (user) => {
-                console.log("Auth state changed. User:", user ? user.uid : "anonymous"); // Debugging line
+                console.log("Auth state changed. User:", user ? user.uid : "anonymous");
                 if (!user) {
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
@@ -161,7 +162,7 @@
                 
                 if (!isAuthReady && auth.currentUser) {
                     isAuthReady = true;
-                    console.log("Authentication is ready. Setting up Firestore listener."); // Debugging line
+                    console.log("Authentication is ready. Setting up Firestore listener.");
                     dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
                     const q = query(dataCollection);
 
