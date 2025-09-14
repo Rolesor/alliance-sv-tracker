@@ -1,29 +1,60 @@
-<<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance SV Daily Growth (Public/Shared)</title>
+    <title>Alliance SV Daily Growth (Password Protected)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        .dialog-box {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: fadeInOut 3s forwards;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+    </style>
 </head>
 <body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
     <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Public/Shared)</h1>
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Password Protected)</h1>
             <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
         </header>
+
         <main id="main-content">
             <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
                 <p class="text-sm font-medium text-indigo-700">How to use:</p>
                 <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
-                    <li>This is a public, shared version of the app. Anyone with the link can add, view, and delete data.</li>
-                    <li>Enter the daily SV in the field below.</li>
-                    <li>The chart and table will update automatically in real time for everyone using the app.</li>
+                    <li>Anyone can view the chart and historical data.</li>
+                    <li>To add or delete data, enter the security word below.</li>
                 </ol>
             </div>
 
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
+            <!-- Password Form -->
+            <form id="passwordForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
+                <input type="password" id="passwordInput" placeholder="Enter security word" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    Unlock Access
+                </button>
+            </form>
+
+            <!-- Data Entry Form (hidden by default) -->
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
                 <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
@@ -43,7 +74,7 @@
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            <th id="actionsHeader" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
@@ -61,7 +92,7 @@
             </footer>
         </main>
     </div>
-
+    
     <!-- Custom Dialog for Messages -->
     <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
         <p id="dialogMessage"></p>
@@ -69,22 +100,34 @@
     
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, orderBy, query, limit, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, orderBy, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const __initial_auth_token = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        
         let growthChart;
         let data = [];
         let db, auth;
+        let ownerAccess = false;
+        
+        // IMPORTANT: In a real-world app, do not hardcode the password like this.
+        // It's for demonstration purposes only.
+        const SECURITY_WORD = "SVgrowth2024";
 
-        function showDialog(message) {
+        function showDialog(message, isError = true) {
             const dialog = document.getElementById('messageDialog');
             const dialogMessage = document.getElementById('dialogMessage');
             dialogMessage.textContent = message;
+            if (isError) {
+                dialog.classList.remove('bg-green-100', 'text-green-700', 'border-green-400');
+                dialog.classList.add('bg-red-100', 'text-red-700', 'border-red-400');
+            } else {
+                dialog.classList.remove('bg-red-100', 'text-red-700', 'border-red-400');
+                dialog.classList.add('bg-green-100', 'text-green-700', 'border-green-400');
+            }
             dialog.classList.remove('hidden');
             setTimeout(() => {
                 dialog.classList.add('hidden');
@@ -96,61 +139,89 @@
                 const app = initializeApp(firebaseConfig);
                 auth = getAuth(app);
                 db = getFirestore(app);
-                
-                // Sign in anonymously to get an auth token for the public collection rules.
-                await signInAnonymously(auth);
 
-                const dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-                const q = query(dataCollection, orderBy("timestamp", "desc"));
-                
-                // Listen for real-time changes to the data
-                onSnapshot(q, (querySnapshot) => {
-                    const fetchedData = [];
-                    querySnapshot.forEach((doc) => {
-                        fetchedData.unshift({ ...doc.data(), id: doc.id });
-                    });
-                    data = fetchedData;
-                    renderTable(data);
-                    renderChart(data);
-                }, (error) => {
-                    console.error("Error fetching data: ", error);
-                    showDialog("Error loading data. Check console for details.");
-                });
-
-                document.getElementById('svForm').addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    const svInput = document.getElementById('svInput');
-                    const sv = parseFloat(svInput.value);
-
-                    if (isNaN(sv) || sv <= 0) {
-                        showDialog("Please enter a valid positive number for the SV.");
-                        return;
+                // Wait for authentication to be ready before doing anything else
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) {
+                        // Sign in with the provided custom token if available, otherwise sign in anonymously
+                        if (initialAuthToken) {
+                            await signInWithCustomToken(auth, initialAuthToken);
+                        } else {
+                            await signInAnonymously(auth);
+                        }
                     }
 
-                    const newDataPoint = {
-                        sv: sv,
-                        date: new Date().toISOString(),
-                        timestamp: Date.now()
+                    // Once authenticated, proceed with Firestore operations
+                    const dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                    const q = query(dataCollection, orderBy("timestamp", "desc"));
+                    
+                    // Listen for real-time changes to the data
+                    onSnapshot(q, (querySnapshot) => {
+                        const fetchedData = [];
+                        querySnapshot.forEach((doc) => {
+                            fetchedData.unshift({ ...doc.data(), id: doc.id });
+                        });
+                        data = fetchedData;
+                        renderTable(data, ownerAccess);
+                        renderChart(data);
+                    }, (error) => {
+                        console.error("Error fetching data: ", error);
+                        showDialog("Error loading data. Check console for details.");
+                    });
+
+                    document.getElementById('passwordForm').addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const passwordInput = document.getElementById('passwordInput').value;
+
+                        if (passwordInput === SECURITY_WORD) {
+                            ownerAccess = true;
+                            document.getElementById('passwordForm').classList.add('hidden');
+                            document.getElementById('svForm').classList.remove('hidden');
+                            document.getElementById('actionsHeader').classList.remove('hidden');
+                            renderTable(data, ownerAccess);
+                            showDialog("Access granted!", false);
+                        } else {
+                            showDialog("Incorrect security word. Access denied.");
+                        }
+                    });
+
+                    document.getElementById('svForm').addEventListener('submit', async function(e) {
+                        e.preventDefault();
+                        const svInput = document.getElementById('svInput');
+                        const sv = parseFloat(svInput.value);
+
+                        if (isNaN(sv) || sv <= 0) {
+                            showDialog("Please enter a valid positive number for the SV.");
+                            return;
+                        }
+
+                        const newDataPoint = {
+                            sv: sv,
+                            date: new Date().toISOString(),
+                            timestamp: Date.now()
+                        };
+
+                        try {
+                            await addDoc(dataCollection, newDataPoint);
+                            svInput.value = '';
+                            showDialog("Entry added successfully!", false);
+                        } catch (e) {
+                            console.error("Error adding document: ", e);
+                            showDialog("Error adding data. Check console for details.");
+                        }
+                    });
+                    
+                    window.deleteDataPoint = async (id) => {
+                        try {
+                            await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                            showDialog("Entry deleted successfully.", false);
+                        } catch (e) {
+                            console.error("Error deleting document: ", e);
+                            showDialog("Error deleting data. Check console for details.");
+                        }
                     };
 
-                    try {
-                        await addDoc(dataCollection, newDataPoint);
-                        svInput.value = '';
-                    } catch (e) {
-                        console.error("Error adding document: ", e);
-                        showDialog("Error adding data. Check console for details.");
-                    }
                 });
-                
-                window.deleteDataPoint = async (id) => {
-                    try {
-                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-                        showDialog("Entry deleted successfully.");
-                    } catch (e) {
-                        console.error("Error deleting document: ", e);
-                        showDialog("Error deleting data. Check console for details.");
-                    }
-                };
 
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
@@ -158,7 +229,7 @@
             }
         });
 
-        function renderTable(dataToRender) {
+        function renderTable(dataToRender, canEdit) {
             const tableBody = document.getElementById('dataTableBody');
             tableBody.innerHTML = '';
             const averageGrowthDiv = document.getElementById('averageGrowth');
@@ -184,11 +255,11 @@
                     <td class="px-6 py-4">${formattedDate}</td>
                     <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
-                    <td class="px-6 py-4">
+                    ${canEdit ? `<td class="px-6 py-4">
                         <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
                             Delete
                         </button>
-                    </td>
+                    </td>` : ''}
                 `;
                 tableBody.appendChild(row);
             });
@@ -260,31 +331,8 @@
             });
         }
     </script>
-    <style>
-        .chart-container {
-            position: relative;
-            height: 400px;
-        }
-        
-        .dialog-box {
-            position: fixed;
-            top: 1rem;
-            right: 1rem;
-            z-index: 1000;
-            padding: 1rem;
-            border-radius: 0.5rem;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            animation: fadeInOut 3s forwards;
-        }
-
-        @keyframes fadeInOut {
-            0% { opacity: 0; transform: translateY(-20px); }
-            10% { opacity: 1; transform: translateY(0); }
-            90% { opacity: 1; transform: translateY(0); }
-            100% { opacity: 0; transform: translateY(-20px); }
-        }
-    </style>
 </body>
 </html>
+
 
 
