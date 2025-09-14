@@ -8,7 +8,327 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-…    </div>
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+        let growthChart;
+        let dataListener;
+        let db;
+        let auth;
+        let userId = null;
+        let isOwner = false;
+
+        // IMPORTANT: Replace this with your own owner ID and a strong password.
+        // This is not a secure way to manage access in a real application, but it works for this demonstration.
+        const ownerId = 'default-owner-id'; 
+        const ownerPassword = 'ownerpassword123';
+
+        document.addEventListener('DOMContentLoaded', async function() {
+            setLogLevel('debug');
+            document.getElementById('modeDisplay').textContent = 'Mode: Public (Read-Only)';
+            
+            // Initialize Firebase
+            if (!firebaseConfig.apiKey) {
+                showDialog("Firebase configuration is missing. Please check your setup.");
+                return;
+            }
+            const app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+
+            // Automatically sign in anonymously for read access
+            try {
+                const userCredential = await signInAnonymously(auth);
+                userId = userCredential.user.uid;
+                listenForDataChanges();
+            } catch (error) {
+                console.error("Anonymous sign-in error:", error);
+                showDialog(`An unexpected error occurred: ${error.message}. Please check your internet connection.`);
+            }
+
+            // Handle "Owner Access" button click
+            document.getElementById('ownerAccessButton').addEventListener('click', () => {
+                const password = prompt("Enter owner password to gain edit access:");
+                if (password === ownerPassword) {
+                    isOwner = true;
+                    document.getElementById('modeDisplay').textContent = 'Mode: Private (Edit Access)';
+                    document.getElementById('ownerAccessButton').classList.add('hidden');
+                    document.getElementById('svForm').classList.remove('hidden');
+                    renderTable(data); // Re-render to show delete buttons
+                } else {
+                    showDialog("Incorrect password.");
+                }
+            });
+
+            const svForm = document.getElementById('svForm');
+            svForm.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!isOwner) {
+                    showDialog("You do not have permission to add data. Enter owner mode first.");
+                    return;
+                }
+
+                const svInput = document.getElementById('svInput');
+                const sv = parseFloat(svInput.value);
+
+                if (isNaN(sv) || sv <= 0) {
+                    showDialog("Please enter a valid positive number for the SV.");
+                    return;
+                }
+
+                const newDataPoint = {
+                    sv: sv,
+                    date: new Date().toISOString(),
+                    userId: ownerId, // All changes are tied to the owner ID
+                    timestamp: Date.now()
+                };
+
+                try {
+                    const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                    await addDoc(growthCollectionRef, newDataPoint);
+                    svInput.value = '';
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    showDialog("Error saving data. Please try again.");
+                }
+            });
+
+            window.deleteDataPoint = async (id, dataUserId) => {
+                try {
+                    if (!isOwner) {
+                        showDialog("You do not have permission to delete data. Enter owner mode first.");
+                        return;
+                    }
+                    if (ownerId !== dataUserId) {
+                        showDialog("You can only delete your own entries.");
+                        return;
+                    }
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                } catch (error) {
+                    console.error("Error deleting document: ", error);
+                    showDialog("Error deleting data. Please try again.");
+                }
+            };
+        });
+
+        function listenForDataChanges() {
+            const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+            const q = query(growthCollectionRef);
+
+            if (dataListener) {
+                dataListener();
+            }
+
+            dataListener = onSnapshot(q, (snapshot) => {
+                let data = [];
+                snapshot.forEach((doc) => {
+                    data.push({ id: doc.id, ...doc.data() });
+                });
+                data.sort((a, b) => a.timestamp - b.timestamp);
+                renderTable(data);
+                renderChart(data);
+            }, (error) => {
+                console.error("Error fetching data: ", error);
+                showDialog("Failed to load data. Please check your connection and ensure your rules are correct.");
+            });
+        }
+
+        function renderTable(dataToRender) {
+            const tableBody = document.getElementById('dataTableBody');
+            tableBody.innerHTML = '';
+            const averageGrowthDiv = document.getElementById('averageGrowth');
+            
+            const dataWithGrowth = dataToRender.map((item, index, array) => {
+                let growth = 0;
+                if (index > 0) {
+                    const prevSv = array[index - 1].sv;
+                        growth = ((item.sv - prevSv) / prevSv) * 100;
+                    }
+                return { ...item, growth_percentage: growth };
+            });
+
+            dataWithGrowth.forEach((item, index) => {
+                const row = document.createElement('tr');
+                row.className = 'bg-white border-b hover:bg-gray-50';
+                const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
+                const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
+
+                let deleteButtonHTML = '';
+                if (isOwner && item.userId === ownerId) {
+                    deleteButtonHTML = `
+                        <button onclick="deleteDataPoint('${item.id}', '${item.userId}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
+                            Delete
+                        </button>
+                    `;
+                }
+
+                row.innerHTML = `
+                    <td class="px-6 py-4">${index + 1}</td>
+                    <td class="px-6 py-4">${new Date(item.date).toLocaleDateString()}</td>
+                    <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
+                    <td class="px-6 py-4">
+                        ${deleteButtonHTML}
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+            
+            if (dataToRender.length > 1) {
+                const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
+                const averageGrowth = totalGrowth / (dataToRender.length - 1);
+                averageGrowthDiv.textContent = `Average Daily Growth: ${averageGrowth.toFixed(2)}%`;
+                averageGrowthDiv.classList.remove('hidden');
+            } else {
+                averageGrowthDiv.classList.add('hidden');
+            }
+        }
+
+        function renderChart(dataToRender) {
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
+            const svValues = dataToRender.map(item => item.sv);
+
+            if (growthChart) {
+                growthChart.destroy();
+            }
+
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Share Value (SV)',
+                        data: svValues,
+                        borderColor: 'rgb(79, 70, 229)',
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `$${context.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'SV'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function showDialog(message) {
+            const dialog = document.getElementById('messageDialog');
+            const dialogMessage = document.getElementById('dialogMessage');
+            dialogMessage.textContent = message;
+            dialog.classList.remove('hidden');
+            setTimeout(() => {
+                dialog.classList.add('hidden');
+            }, 3000);
+        }
+    </script>
+    <style>
+        .chart-container {
+            position: relative;
+            height: 400px;
+        }
+        
+        .dialog-box {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            animation: fadeInOut 3s forwards;
+        }
+
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(-20px); }
+            10% { opacity: 1; transform: translateY(0); }
+            90% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
+    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Public/Private)</h1>
+            <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
+        </header>
+
+        <div class="flex justify-end items-center mb-6">
+            <button id="ownerAccessButton" class="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">Owner Access</button>
+        </div>
+
+        <main id="main-content">
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
+                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    Add Day
+                </button>
+            </form>
+
+            <div class="chart-container mb-8 border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+                <canvas id="growthChart"></canvas>
+            </div>
+
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Historical Data</h2>
+            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
+                        <!-- Data will be dynamically inserted here -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
+                <!-- Average growth will be displayed here -->
+            </div>
+
+            <footer class="mt-8 text-center text-xs text-gray-400">
+                Data is stored in a public cloud database.
+            </footer>
+        </main>
+    </div>
     <div class="fixed top-2 left-2 text-xs text-gray-400 font-bold" id="modeDisplay"></div>
 
     <!-- Custom Dialog for Messages -->
