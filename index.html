@@ -111,7 +111,9 @@
         let growthChart;
         let data = [];
         let db, auth;
+        let dataCollection;
         let ownerAccess = false;
+        let isAuthReady = false;
         
         // IMPORTANT: In a real-world app, do not hardcode the password like this.
         // It's for demonstration purposes only.
@@ -142,92 +144,100 @@
             auth = getAuth(app);
             db = getFirestore(app);
 
-            // Wait for authentication to be ready before doing anything else
             onAuthStateChanged(auth, async (user) => {
                 if (!user) {
-                    // Sign in with the provided custom token if available, otherwise sign in anonymously
                     if (initialAuthToken) {
                         await signInWithCustomToken(auth, initialAuthToken);
                     } else {
                         await signInAnonymously(auth);
                     }
                 }
-
-                // Once authenticated, proceed with Firestore operations
-                const dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-                const q = query(dataCollection);
                 
-                // Listen for real-time changes to the data
-                onSnapshot(q, (querySnapshot) => {
-                    const fetchedData = [];
-                    querySnapshot.forEach((doc) => {
-                        fetchedData.push({ ...doc.data(), id: doc.id });
-                    });
-                    
-                    // Sort the data in-memory by timestamp
-                    fetchedData.sort((a, b) => a.timestamp - b.timestamp);
-                    data = fetchedData;
-                    
-                    renderTable(data, ownerAccess);
-                    renderChart(data);
-                }, (error) => {
-                    console.error("Error fetching data: ", error);
-                    showDialog("Error loading data. Check console for details.");
-                });
+                if (!isAuthReady && auth.currentUser) {
+                    isAuthReady = true;
+                    dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                    const q = query(dataCollection);
 
-                document.getElementById('passwordForm').addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    const passwordInput = document.getElementById('passwordInput').value;
+                    onSnapshot(q, (querySnapshot) => {
+                        const fetchedData = [];
+                        querySnapshot.forEach((doc) => {
+                            fetchedData.push({ ...doc.data(), id: doc.id });
+                        });
 
-                    if (passwordInput === SECURITY_WORD) {
-                        ownerAccess = true;
-                        document.getElementById('passwordForm').classList.add('hidden');
-                        document.getElementById('svForm').classList.remove('hidden');
-                        document.getElementById('actionsHeader').classList.remove('hidden');
+                        fetchedData.sort((a, b) => a.timestamp - b.timestamp);
+                        data = fetchedData;
+                        
                         renderTable(data, ownerAccess);
-                        showDialog("Access granted!", false);
-                    } else {
-                        showDialog("Incorrect security word. Access denied.");
-                    }
-                });
+                        renderChart(data);
+                    }, (error) => {
+                        console.error("Error fetching data: ", error);
+                        showDialog("Error loading data. Check console for details.");
+                    });
+                }
+            });
+            
+            // Password form listener
+            document.getElementById('passwordForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const passwordInput = document.getElementById('passwordInput').value;
 
-                document.getElementById('svForm').addEventListener('submit', async function(e) {
-                    e.preventDefault();
-                    const svInput = document.getElementById('svInput');
-                    const sv = parseFloat(svInput.value);
-
-                    if (isNaN(sv) || sv <= 0) {
-                        showDialog("Please enter a valid positive number for the SV.");
-                        return;
-                    }
-
-                    const newDataPoint = {
-                        sv: sv,
-                        date: new Date().toISOString(),
-                        timestamp: Date.now()
-                    };
-
-                    try {
-                        await addDoc(dataCollection, newDataPoint);
-                        svInput.value = '';
-                        showDialog("Entry added successfully!", false);
-                    } catch (e) {
-                        console.error("Error adding document: ", e);
-                        showDialog("Error adding data. Check console for details.");
-                    }
-                });
-                
-                window.deleteDataPoint = async (id) => {
-                    try {
-                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-                        showDialog("Entry deleted successfully.", false);
-                    } catch (e) {
-                        console.error("Error deleting document: ", e);
-                        showDialog("Error deleting data. Check console for details.");
-                    }
-                };
+                if (passwordInput === SECURITY_WORD) {
+                    ownerAccess = true;
+                    document.getElementById('passwordForm').classList.add('hidden');
+                    document.getElementById('svForm').classList.remove('hidden');
+                    document.getElementById('actionsHeader').classList.remove('hidden');
+                    renderTable(data, ownerAccess);
+                    showDialog("Access granted!", false);
+                } else {
+                    showDialog("Incorrect security word. Access denied.");
+                }
             });
 
+            // Data entry form listener
+            document.getElementById('svForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!isAuthReady) {
+                    showDialog("Authentication not ready. Please wait a moment.");
+                    return;
+                }
+                const svInput = document.getElementById('svInput');
+                const sv = parseFloat(svInput.value);
+
+                if (isNaN(sv) || sv <= 0) {
+                    showDialog("Please enter a valid positive number for the SV.");
+                    return;
+                }
+
+                const newDataPoint = {
+                    sv: sv,
+                    date: new Date().toISOString(),
+                    timestamp: Date.now()
+                };
+
+                try {
+                    await addDoc(dataCollection, newDataPoint);
+                    svInput.value = '';
+                    showDialog("Entry added successfully!", false);
+                } catch (e) {
+                    console.error("Error adding document: ", e);
+                    showDialog("Error adding data. Check console for details.");
+                }
+            });
+            
+            // Delete button function
+            window.deleteDataPoint = async (id) => {
+                if (!isAuthReady) {
+                    showDialog("Authentication not ready. Please wait a moment.");
+                    return;
+                }
+                try {
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                    showDialog("Entry deleted successfully.", false);
+                } catch (e) {
+                    console.error("Error deleting document: ", e);
+                    showDialog("Error deleting data. Check console for details.");
+                }
+            };
         } catch (error) {
             console.error("Firebase initialization failed:", error);
             showDialog("Error initializing Firebase. Please check the console.");
@@ -268,7 +278,6 @@
                 tableBody.appendChild(row);
             });
             
-            // Calculate and display average growth
             if (dataToRender.length > 1) {
                 const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
                 const averageGrowth = totalGrowth / (dataToRender.length - 1);
@@ -337,4 +346,5 @@
     </script>
 </body>
 </html>
+
 
