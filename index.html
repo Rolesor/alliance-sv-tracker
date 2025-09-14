@@ -12,124 +12,90 @@
         import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Check for Firebase environment variables to determine local or shared mode
-        const isSharedMode = typeof __firebase_config !== 'undefined' && Object.keys(JSON.parse(__firebase_config)).length > 0;
-
         let growthChart;
         let data = [];
         let dataListener;
 
         document.addEventListener('DOMContentLoaded', async function() {
-            // Display a message based on the mode
-            document.getElementById('modeDisplay').textContent = isSharedMode ? 'Mode: Shared (Cloud)' : 'Mode: Local (Browser)';
+            // This is the shared version, so we always show shared mode.
+            document.getElementById('modeDisplay').textContent = 'Mode: Shared (Cloud)';
             
-            if (isSharedMode) {
-                // Initialize Firebase and setup listeners for shared mode
-                setLogLevel('debug');
-                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-                const firebaseConfig = JSON.parse(__firebase_config);
-                const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+            // Initialize Firebase and setup listeners for shared mode
+            setLogLevel('debug');
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const firebaseConfig = JSON.parse(__firebase_config);
+            const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
-                const app = initializeApp(firebaseConfig);
-                const db = getFirestore(app);
-                const auth = getAuth(app);
-                let userId = null;
-                let isAuthReady = false;
+            const app = initializeApp(firebaseConfig);
+            const db = getFirestore(app);
+            const auth = getAuth(app);
+            let userId = null;
+            let isAuthReady = false;
 
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        userId = user.uid;
-                        isAuthReady = true;
-                        document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
-                        listenForDataChanges(db, appId);
-                    } else {
-                        isAuthReady = false;
-                        userId = null;
-                        document.getElementById('userIdDisplay').textContent = '';
-                        showDialog("Authentication failed. Please try again.");
-                    }
-                });
-
-                if (initialAuthToken) {
-                    await signInWithCustomToken(auth, initialAuthToken);
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    isAuthReady = true;
+                    document.getElementById('userIdDisplay').textContent = `User ID: ${userId}`;
+                    listenForDataChanges(db, appId);
                 } else {
-                    await signInAnonymously(auth);
+                    isAuthReady = false;
+                    userId = null;
+                    document.getElementById('userIdDisplay').textContent = '';
+                    showDialog("Authentication failed. Please try again.");
+                }
+            });
+
+            if (initialAuthToken) {
+                await signInWithCustomToken(auth, initialAuthToken);
+            } else {
+                await signInAnonymously(auth);
+            }
+
+            document.getElementById('svForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!isAuthReady) {
+                    showDialog("Authentication not ready. Please wait.");
+                    return;
                 }
 
-                document.getElementById('svForm').addEventListener('submit', async function(e) {
-                    e.preventDefault();
+                const svInput = document.getElementById('svInput');
+                const sv = parseFloat(svInput.value);
+
+                if (isNaN(sv) || sv <= 0) {
+                    showDialog("Please enter a valid positive number for the SV.");
+                    return;
+                }
+
+                const newDataPoint = {
+                    sv: sv,
+                    date: new Date().toISOString(),
+                    userId: userId,
+                    timestamp: Date.now()
+                };
+
+                try {
+                    const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
+                    await addDoc(growthCollectionRef, newDataPoint);
+                    svInput.value = '';
+                } catch (error) {
+                    console.error("Error adding document: ", error);
+                    showDialog("Error saving data. Please try again.");
+                }
+            });
+
+            window.deleteDataPoint = async (id) => {
+                try {
                     if (!isAuthReady) {
                         showDialog("Authentication not ready. Please wait.");
                         return;
                     }
-
-                    const svInput = document.getElementById('svInput');
-                    const sv = parseFloat(svInput.value);
-
-                    if (isNaN(sv) || sv <= 0) {
-                        showDialog("Please enter a valid positive number for the SV.");
-                        return;
-                    }
-
-                    const newDataPoint = {
-                        sv: sv,
-                        date: new Date().toISOString(),
-                        userId: userId,
-                        timestamp: Date.now()
-                    };
-
-                    try {
-                        const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-                        await addDoc(growthCollectionRef, newDataPoint);
-                        svInput.value = '';
-                    } catch (error) {
-                        console.error("Error adding document: ", error);
-                        showDialog("Error saving data. Please try again.");
-                    }
-                });
-
-                window.deleteDataPoint = async (id) => {
-                    try {
-                        if (!isAuthReady) {
-                            showDialog("Authentication not ready. Please wait.");
-                            return;
-                        }
-                        await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-                    } catch (error) {
-                        console.error("Error deleting document: ", error);
-                        showDialog("Error deleting data. Please try again.");
-                    }
-                };
-
-            } else {
-                // Setup for local mode using localStorage
-                loadDataFromLocalStorage();
-                document.getElementById('svForm').addEventListener('submit', function(e) {
-                    e.preventDefault();
-                    const svInput = document.getElementById('svInput');
-                    const sv = parseFloat(svInput.value);
-
-                    if (isNaN(sv) || sv <= 0) {
-                        showDialog("Please enter a valid positive number for the SV.");
-                        return;
-                    }
-
-                    const newDataPoint = {
-                        sv: sv,
-                        date: new Date().toISOString(),
-                        id: crypto.randomUUID(),
-                        timestamp: Date.now()
-                    };
-                    data.push(newDataPoint);
-                    saveDataToLocalStorage();
-                    svInput.value = '';
-                });
-
-                window.deleteDataPoint = (id) => {
-                    data = data.filter(item => item.id !== id);
-                    saveDataToLocalStorage();
-                };
-            }
+                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
+                } catch (error) {
+                    console.error("Error deleting document: ", error);
+                    showDialog("Error deleting data. Please try again.");
+                }
+            };
         });
 
         function listenForDataChanges(db, appId) {
@@ -152,21 +118,6 @@
                 console.error("Error fetching data: ", error);
                 showDialog("Failed to load data. Please check your connection.");
             });
-        }
-
-        function loadDataFromLocalStorage() {
-            const storedData = localStorage.getItem('sv_growth_data');
-            if (storedData) {
-                data = JSON.parse(storedData);
-            }
-            renderTable(data);
-            renderChart(data);
-        }
-
-        function saveDataToLocalStorage() {
-            localStorage.setItem('sv_growth_data', JSON.stringify(data));
-            renderTable(data);
-            renderChart(data);
         }
 
         function renderTable(dataToRender) {
@@ -370,5 +321,6 @@
     </div>
 </body>
 </html>
+
 
 
