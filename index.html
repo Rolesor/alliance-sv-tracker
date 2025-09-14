@@ -105,7 +105,14 @@
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const firebaseConfig = {
+          apiKey: "AIzaSyAxr2mBPCHZnUKIVE3rYG-iQCLoXQ0HC_Q",
+          authDomain: "sv-alliance-growth.firebaseapp.com",
+          projectId: "sv-alliance-growth",
+          storageBucket: "sv-alliance-growth.firebasestorage.app",
+          messagingSenderId: "370137693484",
+          appId: "1:370137693484:web:481d535ff4a82adb19c089"
+        };
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
@@ -150,14 +157,11 @@
             db = getFirestore(app);
             console.log("Firebase initialized successfully.");
 
+            // Simplified authentication logic to prevent custom token mismatch error
             onAuthStateChanged(auth, async (user) => {
                 console.log("Auth state changed. User:", user ? user.uid : "anonymous");
                 if (!user) {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(auth, initialAuthToken);
-                    } else {
-                        await signInAnonymously(auth);
-                    }
+                   await signInAnonymously(auth);
                 }
                 
                 if (!isAuthReady && auth.currentUser) {
