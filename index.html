@@ -3,85 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance SV Daily Growth (Public/Private)</title>
+    <title>Alliance SV Daily Growth (Local)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, addDoc, deleteDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
-
+    <script>
         let growthChart;
-        let dataListener;
-        let db;
-        let auth;
-        let userId = null;
-        let ownerId = null;
+        let data = [];
+
+        function showDialog(message) {
+            const dialog = document.getElementById('messageDialog');
+            const dialogMessage = document.getElementById('dialogMessage');
+            dialogMessage.textContent = message;
+            dialog.classList.remove('hidden');
+            setTimeout(() => {
+                dialog.classList.add('hidden');
+            }, 3000);
+        }
 
         document.addEventListener('DOMContentLoaded', async function() {
-            setLogLevel('debug');
-
-            // Initialize Firebase
-            if (!firebaseConfig.apiKey) {
-                showDialog("Firebase configuration is missing. Please check your setup.");
-                return;
-            }
-            const app = initializeApp(firebaseConfig);
-            db = getFirestore(app);
-            auth = getAuth(app);
-            
-            // Sign in the owner if a custom token is available, otherwise sign in anonymously
-            if (initialAuthToken) {
-                try {
-                    const userCredential = await signInWithCustomToken(auth, initialAuthToken);
-                    ownerId = userCredential.user.uid;
-                } catch (error) {
-                    console.error("Owner sign-in error:", error);
-                    showDialog("Error signing in as owner. Please contact support.");
-                    return;
-                }
-            } else {
-                try {
-                    await signInAnonymously(auth);
-                } catch (error) {
-                    console.error("Anonymous sign-in error:", error);
-                    showDialog(`An unexpected error occurred: ${error.message}. Please check your internet connection.`);
-                    return;
-                }
-            }
-            
-            onAuthStateChanged(auth, (user) => {
-                if (user) {
-                    userId = user.uid;
-                    document.getElementById('modeDisplay').textContent = (userId === ownerId) ? 'Mode: Owner (Edit Access)' : 'Mode: Public (Read-Only)';
-                    
-                    const isOwner = (userId === ownerId);
-                    document.getElementById('svForm').classList.toggle('hidden', !isOwner);
-                    document.getElementById('ownerMessage').classList.toggle('hidden', isOwner);
-
-                    // Re-render table to show/hide delete buttons
-                    if (dataListener) {
-                        dataListener(); // Detach old listener
-                    }
-                    listenForDataChanges();
-                } else {
-                    userId = null;
-                    document.getElementById('modeDisplay').textContent = 'Mode: Public (Read-Only)';
-                    document.getElementById('svForm').classList.add('hidden');
-                    document.getElementById('ownerMessage').classList.remove('hidden');
-                    if (dataListener) {
-                        dataListener();
-                    }
-                }
-            });
-
-            const svForm = document.getElementById('svForm');
-            svForm.addEventListener('submit', async function(e) {
+            // Setup for local mode using localStorage
+            loadDataFromLocalStorage();
+            document.getElementById('svForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 const svInput = document.getElementById('svInput');
                 const sv = parseFloat(svInput.value);
@@ -94,54 +36,44 @@
                 const newDataPoint = {
                     sv: sv,
                     date: new Date().toISOString(),
-                    userId: ownerId,
+                    id: crypto.randomUUID(),
                     timestamp: Date.now()
                 };
-
-                try {
-                    const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-                    await addDoc(growthCollectionRef, newDataPoint);
-                    svInput.value = '';
-                } catch (error) {
-                    console.error("Error adding document: ", error);
-                    showDialog("Error saving data. Please try again.");
-                }
+                data.push(newDataPoint);
+                saveDataToLocalStorage();
+                svInput.value = '';
             });
 
-            window.deleteDataPoint = async (id, dataUserId) => {
-                try {
-                    if (userId !== ownerId) {
-                        showDialog("You do not have permission to delete data.");
-                        return;
-                    }
-                    if (ownerId !== dataUserId) {
-                        showDialog("You can only delete your own entries.");
-                        return;
-                    }
-                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-                } catch (error) {
-                    console.error("Error deleting document: ", error);
-                    showDialog("Error deleting data. Please try again.");
-                }
+            window.deleteDataPoint = (id) => {
+                data = data.filter(item => item.id !== id);
+                saveDataToLocalStorage();
             };
         });
 
-        function listenForDataChanges() {
-            const growthCollectionRef = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
-            const q = query(growthCollectionRef);
+        function loadDataFromLocalStorage() {
+            try {
+                const storedData = localStorage.getItem('sv_growth_data');
+                if (storedData) {
+                    data = JSON.parse(storedData);
+                }
+            } catch (error) {
+                console.error("Error loading data from local storage:", error);
+                showDialog("Error loading data. It may be corrupted.");
+                data = []; // Reset data to avoid further issues
+            }
+            renderTable(data);
+            renderChart(data);
+        }
 
-            dataListener = onSnapshot(q, (snapshot) => {
-                let data = [];
-                snapshot.forEach((doc) => {
-                    data.push({ id: doc.id, ...doc.data() });
-                });
-                data.sort((a, b) => a.timestamp - b.timestamp);
-                renderTable(data);
-                renderChart(data);
-            }, (error) => {
-                console.error("Error fetching data: ", error);
-                showDialog("Failed to load data. Please check your connection and ensure your rules are correct.");
-            });
+        function saveDataToLocalStorage() {
+            try {
+                localStorage.setItem('sv_growth_data', JSON.stringify(data));
+            } catch (error) {
+                console.error("Error saving data to local storage:", error);
+                showDialog("Error saving data. Your browser may be in private mode or has exceeded its storage limit.");
+            }
+            renderTable(data);
+            renderChart(data);
         }
 
         function renderTable(dataToRender) {
@@ -153,8 +85,8 @@
                 let growth = 0;
                 if (index > 0) {
                     const prevSv = array[index - 1].sv;
-                        growth = ((item.sv - prevSv) / prevSv) * 100;
-                    }
+                    growth = ((item.sv - prevSv) / prevSv) * 100;
+                }
                 return { ...item, growth_percentage: growth };
             });
 
@@ -164,27 +96,21 @@
                 const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
                 const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
 
-                let deleteButtonHTML = '';
-                if (userId === ownerId && item.userId === ownerId) {
-                    deleteButtonHTML = `
-                        <button onclick="deleteDataPoint('${item.id}', '${item.userId}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
-                            Delete
-                        </button>
-                    `;
-                }
-
                 row.innerHTML = `
                     <td class="px-6 py-4">${index + 1}</td>
                     <td class="px-6 py-4">${new Date(item.date).toLocaleDateString()}</td>
                     <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     <td class="px-6 py-4">
-                        ${deleteButtonHTML}
+                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
+                            Delete
+                        </button>
                     </td>
                 `;
                 tableBody.appendChild(row);
             });
             
+            // Calculate and display average growth
             if (dataToRender.length > 1) {
                 const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
                 const averageGrowth = totalGrowth / (dataToRender.length - 1);
@@ -250,16 +176,6 @@
                 }
             });
         }
-
-        function showDialog(message) {
-            const dialog = document.getElementById('messageDialog');
-            const dialogMessage = document.getElementById('dialogMessage');
-            dialogMessage.textContent = message;
-            dialog.classList.remove('hidden');
-            setTimeout(() => {
-                dialog.classList.add('hidden');
-            }, 3000);
-        }
     </script>
     <style>
         .chart-container {
@@ -289,16 +205,22 @@
 <body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
     <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Public/Private)</h1>
+            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Local)</h1>
             <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
         </header>
-        
-        <div id="ownerMessage" class="bg-indigo-50 text-indigo-700 p-4 rounded-lg text-center font-medium mb-6">
-            This app is in read-only mode. The owner can add or delete data.
-        </div>
-        
+
         <main id="main-content">
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
+            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                <p class="text-sm font-medium text-indigo-700">How to use:</p>
+                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
+                    <li>Enter the daily SV in the field below.</li>
+                    <li>Click 'Add Day' to save the data.</li>
+                    <li>The chart and table will update automatically.</li>
+                    <li>Click 'Delete' next to any entry to remove it.</li>
+                </ol>
+            </div>
+
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
                 <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
@@ -332,11 +254,10 @@
             </div>
 
             <footer class="mt-8 text-center text-xs text-gray-400">
-                Data is stored in a public cloud database.
+                Data is stored in your browser's local storage.
             </footer>
         </main>
     </div>
-    <div class="fixed top-2 left-2 text-xs text-gray-400 font-bold" id="modeDisplay"></div>
 
     <!-- Custom Dialog for Messages -->
     <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
