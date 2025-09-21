@@ -45,7 +45,6 @@
                 </ol>
             </div>
 
-            <!-- Password Form -->
             <form id="passwordForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
                 <input type="password" id="passwordInput" placeholder="Enter security word" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
@@ -53,8 +52,11 @@
                 </button>
             </form>
 
-            <!-- Data Entry Form (hidden by default) -->
             <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
+                <div class="flex-grow flex items-center gap-2">
+                    <label for="dateInput" class="text-gray-600">Date:</label>
+                    <input type="date" id="dateInput" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
                 <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
@@ -78,14 +80,12 @@
                         </tr>
                     </thead>
                     <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
-                        <!-- Data will be dynamically inserted here -->
-                    </tbody>
+                        </tbody>
                 </table>
             </div>
             
             <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
-                <!-- Average growth will be displayed here -->
-            </div>
+                </div>
 
             <footer class="mt-8 text-center text-xs text-gray-400">
                 Data is stored in a public, shared cloud database.
@@ -93,7 +93,6 @@
         </main>
     </div>
     
-    <!-- Custom Dialog for Messages -->
     <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
         <p id="dialogMessage"></p>
     </div>
@@ -213,22 +212,30 @@
                     return;
                 }
                 const svInput = document.getElementById('svInput');
+                const dateInput = document.getElementById('dateInput');
                 const sv = parseFloat(svInput.value);
+                const selectedDate = new Date(dateInput.value);
 
                 if (isNaN(sv) || sv <= 0) {
                     showDialog("Please enter a valid positive number for the SV.");
                     return;
                 }
 
+                if (isNaN(selectedDate.getTime())) {
+                    showDialog("Please select a valid date.");
+                    return;
+                }
+
                 const newDataPoint = {
                     sv: sv,
-                    date: new Date().toISOString(),
-                    timestamp: Date.now()
+                    date: selectedDate.toISOString(),
+                    timestamp: selectedDate.getTime()
                 };
 
                 try {
                     await addDoc(dataCollection, newDataPoint);
                     svInput.value = '';
+                    dateInput.value = ''; // Clear the date input after successful submission
                     showDialog("Entry added successfully!", false);
                 } catch (e) {
                     console.error("Error adding document: ", e);
