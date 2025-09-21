@@ -7,6 +7,17 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <style>
+        /* Custom styles for the body background */
+        body {
+            background-image: url('rolex_crown_bg.jpg'); /* Make sure this path is correct */
+            background-size: cover; /* Cover the entire viewport */
+            background-repeat: no-repeat; /* Prevent the image from repeating */
+            background-position: center center; /* Center the image */
+            background-attachment: fixed; /* Keep background fixed during scroll */
+            /* Add a fallback background color in case the image doesn't load */
+            background-color: #000;
+            color: #e0e0e0; /* Light text for readability on dark background */
+        }
         .chart-container {
             position: relative;
             height: 400px;
@@ -27,9 +38,14 @@
             90% { opacity: 1; transform: translateY(0); }
             100% { opacity: 0; transform: translateY(-20px); }
         }
+        /* Override specific Tailwind classes that set background color on body */
+        .bg-gray-100 { background-color: transparent !important; }
+        .text-gray-800 { color: #f0f0f0 !important; } /* Lighter heading */
+        .text-gray-500 { color: #a0a0a0 !important; } /* Lighter paragraph text */
+        .text-gray-600 { color: #c0c0c0 !important; } /* Lighter label text */
     </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
+<body class="font-sans antialiased flex flex-col items-center p-4 min-h-screen">
     <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
         <header class="text-center mb-6">
             <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Password Protected)</h1>
@@ -52,7 +68,7 @@
                 </button>
             </form>
 
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
                 <div class="flex-grow flex items-center gap-2">
                     <label for="dateInput" class="text-gray-600">Date:</label>
                     <input type="date" id="dateInput" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
@@ -274,6 +290,7 @@
                 if (item) {
                     docToEditId = id;
                     document.getElementById('svInput').value = item.sv;
+                    // Ensure the date is in YYYY-MM-DD format for the input type="date"
                     document.getElementById('dateInput').value = item.date.split('T')[0];
                     document.getElementById('submitButton').textContent = 'Update Day';
                     showDialog("Editing entry...", false);
