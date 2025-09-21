@@ -58,7 +58,7 @@
                     <input type="date" id="dateInput" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
                 </div>
                 <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
-                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                <button type="submit" id="submitButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
                 </button>
             </form>
@@ -100,7 +100,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
@@ -121,6 +121,7 @@
         let dataCollection;
         let ownerAccess = false;
         let isAuthReady = false;
+        let docToEditId = null;
         
         // IMPORTANT: In a real-world app, do not hardcode the password like this.
         // It's for demonstration purposes only.
@@ -185,183 +186,3 @@
                         showDialog("Error loading data. Check console for details.");
                     });
                 }
-            });
-            
-            // Password form listener
-            document.getElementById('passwordForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const passwordInput = document.getElementById('passwordInput').value;
-
-                if (passwordInput === SECURITY_WORD) {
-                    ownerAccess = true;
-                    document.getElementById('passwordForm').classList.add('hidden');
-                    document.getElementById('svForm').classList.remove('hidden');
-                    document.getElementById('actionsHeader').classList.remove('hidden');
-                    renderTable(data, ownerAccess);
-                    showDialog("Access granted!", false);
-                } else {
-                    showDialog("Incorrect security word. Access denied.");
-                }
-            });
-
-            // Data entry form listener
-            document.getElementById('svForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (!isAuthReady) {
-                    showDialog("Authentication not ready. Please wait a moment.");
-                    return;
-                }
-                const svInput = document.getElementById('svInput');
-                const dateInput = document.getElementById('dateInput');
-                const sv = parseFloat(svInput.value);
-                const selectedDate = new Date(dateInput.value);
-
-                if (isNaN(sv) || sv <= 0) {
-                    showDialog("Please enter a valid positive number for the SV.");
-                    return;
-                }
-
-                if (isNaN(selectedDate.getTime())) {
-                    showDialog("Please select a valid date.");
-                    return;
-                }
-
-                const newDataPoint = {
-                    sv: sv,
-                    date: selectedDate.toISOString(),
-                    timestamp: selectedDate.getTime()
-                };
-
-                try {
-                    await addDoc(dataCollection, newDataPoint);
-                    svInput.value = '';
-                    dateInput.value = ''; // Clear the date input after successful submission
-                    showDialog("Entry added successfully!", false);
-                } catch (e) {
-                    console.error("Error adding document: ", e);
-                    showDialog("Error adding data. Check console for details.");
-                }
-            });
-            
-            // Delete button function
-            window.deleteDataPoint = async (id) => {
-                if (!isAuthReady) {
-                    showDialog("Authentication not ready. Please wait a moment.");
-                    return;
-                }
-                try {
-                    await deleteDoc(doc(db, `artifacts/${appId}/public/data/sv_growth_data`, id));
-                    showDialog("Entry deleted successfully.", false);
-                } catch (e) {
-                    console.error("Error deleting document: ", e);
-                    showDialog("Error deleting data. Check console for details.");
-                }
-            };
-        } catch (error) {
-            console.error("Firebase initialization failed:", error);
-            showDialog("Error initializing Firebase. Please check the console.");
-        }
-
-        function renderTable(dataToRender, canEdit) {
-            const tableBody = document.getElementById('dataTableBody');
-            tableBody.innerHTML = '';
-            const averageGrowthDiv = document.getElementById('averageGrowth');
-            
-            const dataWithGrowth = dataToRender.map((item, index, array) => {
-                let growth = 0;
-                if (index > 0) {
-                    const prevSv = array[index - 1].sv;
-                    growth = ((item.sv - prevSv) / prevSv) * 100;
-                }
-                return { ...item, growth_percentage: growth };
-            });
-
-            dataWithGrowth.forEach((item, index) => {
-                const row = document.createElement('tr');
-                row.className = 'bg-white border-b hover:bg-gray-50';
-                const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
-                const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
-                const formattedDate = new Date(item.date).toLocaleDateString();
-
-                row.innerHTML = `
-                    <td class="px-6 py-4">${index + 1}</td>
-                    <td class="px-6 py-4">${formattedDate}</td>
-                    <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
-                    ${canEdit ? `<td class="px-6 py-4">
-                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
-                            Delete
-                        </button>
-                    </td>` : ''}
-                `;
-                tableBody.appendChild(row);
-            });
-            
-            if (dataToRender.length > 1) {
-                const totalGrowth = dataWithGrowth.slice(1).reduce((sum, item) => sum + item.growth_percentage, 0);
-                const averageGrowth = totalGrowth / (dataToRender.length - 1);
-                averageGrowthDiv.textContent = `Average Daily Growth: ${averageGrowth.toFixed(2)}%`;
-                averageGrowthDiv.classList.remove('hidden');
-            } else {
-                averageGrowthDiv.classList.add('hidden');
-            }
-        }
-
-        function renderChart(dataToRender) {
-            const ctx = document.getElementById('growthChart').getContext('2d');
-            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
-            const svValues = dataToRender.map(item => item.sv);
-
-            if (growthChart) {
-                growthChart.destroy();
-            }
-
-            growthChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Share Value (SV)',
-                        data: svValues,
-                        borderColor: 'rgb(79, 70, 229)',
-                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                        tension: 0.1,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: function(context) {
-                                    return `$${context.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: false,
-                            title: {
-                                display: true,
-                                text: 'SV'
-                            }
-                        },
-                        x: {
-                            title: {
-                                display: true,
-                                text: 'Date'
-                            }
-                        }
-                    }
-                }
-            });
-        }
-    </script>
-</body>
-</html>
