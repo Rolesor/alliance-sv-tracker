@@ -7,6 +7,18 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <style>
+        body {
+            background-image: url('rolex_crown_bg.jpg');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center center;
+            background-attachment: fixed;
+            background-color: #000;
+        }
+        .main-container {
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black background */
+            color: #f0f0f0; /* Light text for readability */
+        }
         .chart-container {
             position: relative;
             height: 400px;
@@ -27,67 +39,80 @@
             90% { opacity: 1; transform: translateY(0); }
             100% { opacity: 0; transform: translateY(-20px); }
         }
+        /* Style for form elements to make them readable on a dark background */
+        .input-dark-bg {
+            background-color: #1f2937;
+            color: #f0f0f0;
+            border-color: #4b5563;
+        }
+        .input-dark-bg::placeholder {
+            color: #9ca3af;
+        }
+        /* Style for table */
+        .table-dark-bg {
+            background-color: #1f2937;
+        }
     </style>
 </head>
-<body class="bg-gray-100 font-sans antialiased flex flex-col items-center p-4 min-h-screen">
-    <div class="max-w-4xl w-full bg-white rounded-xl shadow-lg p-6 md:p-8">
+<body class="font-sans antialiased flex flex-col items-center p-4 min-h-screen">
+    <div class="max-w-4xl w-full rounded-xl shadow-lg p-6 md:p-8 main-container">
         <header class="text-center mb-6">
-            <h1 class="text-3xl font-bold text-gray-800">Alliance SV Daily Growth (Password Protected)</h1>
-            <p class="text-gray-500 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
+            <h1 class="text-3xl font-bold text-white">Alliance SV Daily Growth</h1>
+            <p class="text-gray-400 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
         </header>
 
         <main id="main-content">
-            <div class="mb-6 bg-indigo-50 p-4 rounded-lg border border-indigo-200">
-                <p class="text-sm font-medium text-indigo-700">How to use:</p>
-                <ol class="list-decimal list-inside text-indigo-600 text-sm mt-1 space-y-1">
+            <div class="mb-6 bg-indigo-900 p-4 rounded-lg border border-indigo-700 text-indigo-200">
+                <p class="text-sm font-medium">How to use:</p>
+                <ol class="list-decimal list-inside text-indigo-300 text-sm mt-1 space-y-1">
                     <li>Anyone can view the chart and historical data.</li>
                     <li>To add or delete data, enter the security word below.</li>
                 </ol>
             </div>
 
-            <form id="passwordForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm">
-                <input type="password" id="passwordInput" placeholder="Enter security word" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+            <form id="passwordForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-900 rounded-lg shadow-sm">
+                <input type="password" id="passwordInput" placeholder="Enter security word" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
                 <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Unlock Access
                 </button>
             </form>
 
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-50 rounded-lg shadow-sm hidden">
+            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-900 rounded-lg shadow-sm hidden">
                 <div class="flex-grow flex items-center gap-2">
-                    <label for="dateInput" class="text-gray-600">Date:</label>
-                    <input type="date" id="dateInput" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                    <label for="dateInput" class="text-gray-400">Date:</label>
+                    <input type="date" id="dateInput" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
                 </div>
-                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
                 <button type="submit" id="submitButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
                 </button>
             </form>
 
-            <div class="chart-container mb-8 border border-gray-200 rounded-lg p-4 bg-white shadow-sm">
+            <div class="chart-container mb-8 border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
                 <canvas id="growthChart"></canvas>
             </div>
 
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Historical Data</h2>
-            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-200">
-                <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-100">
+            <h2 class="text-2xl font-semibold text-white mb-4">Historical Data</h2>
+            <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-700">
+                <table class="min-w-full divide-y divide-gray-700 table-dark-bg">
+                    <thead class="bg-gray-800 text-gray-400">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Day</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SV</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Growth %</th>
-                            <th id="actionsHeader" scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden">Actions</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Day</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">SV</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Growth %</th>
+                            <th id="actionsHeader" scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider hidden">Actions</th>
                         </tr>
                     </thead>
-                    <tbody id="dataTableBody" class="bg-white divide-y divide-gray-200">
+                    <tbody id="dataTableBody" class="divide-y divide-gray-700">
                         </tbody>
                 </table>
             </div>
             
-            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-50 rounded-lg text-indigo-700 font-semibold text-center hidden">
+            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-900 rounded-lg text-indigo-200 font-semibold text-center hidden">
                 </div>
 
-            <footer class="mt-8 text-center text-xs text-gray-400">
+            <footer class="mt-8 text-center text-xs text-gray-500">
                 Data is stored in a public, shared cloud database.
             </footer>
         </main>
@@ -123,8 +148,6 @@
         let isAuthReady = false;
         let docToEditId = null;
         
-        // IMPORTANT: In a real-world app, do not hardcode the password like this.
-        // It's for demonstration purposes only.
         const SECURITY_WORD = "SVgrowth2024";
 
         function showDialog(message, isError = true) {
@@ -146,7 +169,6 @@
 
         try {
             setLogLevel('debug');
-            console.log("Firebase config is:", firebaseConfig); 
             if (Object.keys(firebaseConfig).length === 0) {
                 console.error("Firebase config is missing.");
                 showDialog("Firebase config is missing. Please check the environment setup.");
@@ -155,18 +177,14 @@
             const app = initializeApp(firebaseConfig);
             auth = getAuth(app);
             db = getFirestore(app);
-            console.log("Firebase initialized successfully.");
 
-            // Simplified authentication logic to prevent custom token mismatch error
             onAuthStateChanged(auth, async (user) => {
-                console.log("Auth state changed. User:", user ? user.uid : "anonymous");
                 if (!user) {
                    await signInAnonymously(auth);
                 }
                 
                 if (!isAuthReady && auth.currentUser) {
                     isAuthReady = true;
-                    console.log("Authentication is ready. Setting up Firestore listener.");
                     dataCollection = collection(db, `artifacts/${appId}/public/data/sv_growth_data`);
                     const q = query(dataCollection);
 
@@ -188,7 +206,6 @@
                 }
             });
             
-            // Password form listener
             document.getElementById('passwordForm').addEventListener('submit', function(e) {
                 e.preventDefault();
                 const passwordInput = document.getElementById('passwordInput').value;
@@ -205,7 +222,6 @@
                 }
             });
 
-            // Data entry form listener
             document.getElementById('svForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 if (!isAuthReady) {
@@ -235,11 +251,9 @@
 
                 try {
                     if (docToEditId) {
-                        // We are in edit mode
                         await updateDoc(doc(dataCollection, docToEditId), newDataPoint);
                         showDialog("Entry updated successfully!", false);
                     } else {
-                        // We are in add new mode
                         await addDoc(dataCollection, newDataPoint);
                         showDialog("Entry added successfully!", false);
                     }
@@ -253,7 +267,6 @@
                 }
             });
             
-            // Delete button function
             window.deleteDataPoint = async (id) => {
                 if (!isAuthReady) {
                     showDialog("Authentication not ready. Please wait a moment.");
@@ -268,7 +281,6 @@
                 }
             };
 
-            // Edit button function
             window.editDataPoint = (id) => {
                 const item = data.find(d => d.id === id);
                 if (item) {
@@ -300,21 +312,21 @@
 
             dataWithGrowth.forEach((item, index) => {
                 const row = document.createElement('tr');
-                row.className = 'bg-white border-b hover:bg-gray-50';
+                row.className = 'divide-y divide-gray-700';
                 const growthText = index === 0 ? 'N/A' : `${item.growth_percentage.toFixed(2)}%`;
-                const growthColor = index === 0 ? 'text-gray-500' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
+                const growthColor = index === 0 ? 'text-gray-400' : (item.growth_percentage >= 0 ? 'text-green-500' : 'text-red-500');
                 const formattedDate = new Date(item.date).toLocaleDateString();
 
                 row.innerHTML = `
-                    <td class="px-6 py-4">${index + 1}</td>
-                    <td class="px-6 py-4">${formattedDate}</td>
-                    <td class="px-6 py-4">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td class="px-6 py-4 text-gray-200">${index + 1}</td>
+                    <td class="px-6 py-4 text-gray-200">${formattedDate}</td>
+                    <td class="px-6 py-4 text-gray-200">$${item.sv.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     ${canEdit ? `<td class="px-6 py-4 flex gap-2">
-                        <button onclick="editDataPoint('${item.id}')" class="text-indigo-600 hover:text-indigo-900 font-semibold focus:outline-none">
+                        <button onclick="editDataPoint('${item.id}')" class="text-indigo-400 hover:text-indigo-200 font-semibold focus:outline-none">
                             Edit
                         </button>
-                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-600 hover:text-red-900 font-semibold focus:outline-none">
+                        <button onclick="deleteDataPoint('${item.id}')" class="text-red-400 hover:text-red-200 font-semibold focus:outline-none">
                             Delete
                         </button>
                     </td>` : ''}
@@ -359,7 +371,10 @@
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
-                            display: true
+                            display: true,
+                            labels: {
+                                color: '#f0f0f0'
+                            }
                         },
                         tooltip: {
                             callbacks: {
@@ -374,13 +389,27 @@
                             beginAtZero: false,
                             title: {
                                 display: true,
-                                text: 'SV'
+                                text: 'SV',
+                                color: '#f0f0f0'
+                            },
+                            ticks: {
+                                color: '#f0f0f0'
+                            },
+                            grid: {
+                                color: '#4b5563'
                             }
                         },
                         x: {
                             title: {
                                 display: true,
-                                text: 'Date'
+                                text: 'Date',
+                                color: '#f0f0f0'
+                            },
+                            ticks: {
+                                color: '#f0f0f0'
+                            },
+                            grid: {
+                                color: '#4b5563'
                             }
                         }
                     }
