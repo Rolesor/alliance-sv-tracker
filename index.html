@@ -168,7 +168,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, updateDoc, query, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, query, doc, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
@@ -237,8 +237,15 @@
                             fetchedData.push({ ...doc.data(), id: doc.id });
                         });
 
-                        fetchedData.sort((a, b) => a.timestamp - b.timestamp); // Sort by date ascending
-                        data = fetchedData;
+                        const dailyDataMap = fetchedData.reduce((acc, curr) => {
+                            const dateKey = new Date(curr.timestamp).toLocaleDateString('en-US');
+                            acc[dateKey] = { ...acc[dateKey], ...curr };
+                            return acc;
+                        }, {});
+
+                        const combinedData = Object.values(dailyDataMap);
+                        combinedData.sort((a, b) => a.timestamp - b.timestamp);
+                        data = combinedData;
                         
                         renderTable(data, ownerAccess);
                         renderGrowthChart(data);
@@ -280,20 +287,26 @@
                     return;
                 }
                 
-                const newDataPoint = {
-                    sv: sv,
-                    date: new Date().toISOString(),
-                    timestamp: Date.now()
-                };
+                const today = new Date().toLocaleDateString('en-US');
+                const existingDocQuery = query(dataCollection, where("date_string", "==", today));
+                const existingDocs = await getDocs(existingDocQuery);
 
-                try {
-                    await addDoc(dataCollection, newDataPoint);
-                    svInput.value = '';
+                if (!existingDocs.empty) {
+                    const docId = existingDocs.docs[0].id;
+                    await updateDoc(doc(dataCollection, docId), {
+                        sv: sv,
+                        timestamp: Date.now()
+                    });
+                    showDialog("SV value updated successfully!", false);
+                } else {
+                    await addDoc(dataCollection, {
+                        sv: sv,
+                        date_string: today,
+                        timestamp: Date.now()
+                    });
                     showDialog("New SV value saved successfully!", false);
-                } catch (e) {
-                    console.error("Error adding document: ", e);
-                    showDialog("Error saving data. Check console for details.");
                 }
+                svInput.value = '';
             });
 
             document.getElementById('addGrowthForm').addEventListener('submit', async function(e) {
@@ -309,21 +322,27 @@
                     showDialog("Please enter a valid number for the growth amount.");
                     return;
                 }
-                
-                const newDataPoint = {
-                    growth_amount: growth,
-                    date: new Date().toISOString(),
-                    timestamp: Date.now()
-                };
 
-                try {
-                    await addDoc(dataCollection, newDataPoint);
-                    growthInput.value = '';
+                const today = new Date().toLocaleDateString('en-US');
+                const existingDocQuery = query(dataCollection, where("date_string", "==", today));
+                const existingDocs = await getDocs(existingDocQuery);
+
+                if (!existingDocs.empty) {
+                    const docId = existingDocs.docs[0].id;
+                    await updateDoc(doc(dataCollection, docId), {
+                        growth_amount: growth,
+                        timestamp: Date.now()
+                    });
+                    showDialog("Growth entry updated successfully!", false);
+                } else {
+                    await addDoc(dataCollection, {
+                        growth_amount: growth,
+                        date_string: today,
+                        timestamp: Date.now()
+                    });
                     showDialog("New growth entry saved successfully!", false);
-                } catch (e) {
-                    console.error("Error adding document: ", e);
-                    showDialog("Error saving data. Check console for details.");
                 }
+                growthInput.value = '';
             });
             
             window.deleteDataPoint = async (id) => {
@@ -378,7 +397,7 @@
                 const svText = typeof item.sv === 'number' ? `$${item.sv.toFixed(2)}` : 'N/A';
                 const growthText = typeof item.growth_amount === 'number' ? `$${item.growth_amount.toFixed(2)}` : 'N/A';
                 const growthColor = typeof item.growth_amount === 'number' ? (item.growth_amount >= 0 ? 'text-green-500' : 'text-red-500') : 'text-gray-400';
-                const formattedDate = new Date(item.date).toLocaleDateString();
+                const formattedDate = item.date_string ? item.date_string : new Date(item.timestamp).toLocaleDateString();
 
                 row.innerHTML = `
                     <td class="px-6 py-4 text-gray-200">${dataToRender.length - index}</td>
@@ -439,7 +458,7 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
 
-            const labels = growthData.map(item => new Date(item.date).toLocaleDateString());
+            const labels = growthData.map(item => item.date_string);
             const growthValues = growthData.map(item => item.growth_amount);
             
             let averageGrowth = growthValues.reduce((sum, value) => sum + value, 0) / growthValues.length;
@@ -551,7 +570,7 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
             
-            const labels = svData.map(item => new Date(item.date).toLocaleDateString());
+            const labels = svData.map(item => item.date_string);
             const svValues = svData.map(item => item.sv);
             
             if (svChart) {
