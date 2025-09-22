@@ -37,7 +37,7 @@
             0% { opacity: 0; transform: translateY(-20px); }
             10% { opacity: 1; transform: translateY(0); }
             90% { opacity: 1; transform: translateY(0); }
-            100% { opacity 0; transform: translateY(-20px); }
+            100% { opacity: 0; transform: translateY(-20px); }
         }
         /* Style for form elements to make them readable on a dark background */
         .input-dark-bg {
@@ -381,24 +381,35 @@
 
         function renderChart(dataToRender) {
             const ctx = document.getElementById('growthChart').getContext('2d');
-            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
-            const svValues = dataToRender.map(item => item.sv);
+            
+            // Calculate growth percentages
+            const dataWithGrowth = dataToRender.map((item, index, array) => {
+                let growth = 0;
+                if (index < array.length - 1) {
+                    const prevSv = array[index + 1].sv;
+                    growth = ((item.sv - prevSv) / prevSv) * 100;
+                }
+                return { ...item, growth_percentage: growth };
+            });
+
+            const labels = dataWithGrowth.map(item => new Date(item.date).toLocaleDateString());
+            const growthValues = dataWithGrowth.map(item => item.growth_percentage);
+            const barColors = growthValues.map(value => value >= 0 ? 'rgba(34, 197, 94, 0.8)' : 'rgba(239, 68, 68, 0.8)');
 
             if (growthChart) {
                 growthChart.destroy();
             }
 
             growthChart = new Chart(ctx, {
-                type: 'line',
+                type: 'bar', // Change chart type to 'bar'
                 data: {
                     labels: labels,
                     datasets: [{
-                        label: 'Share Value (SV)',
-                        data: svValues,
-                        borderColor: 'rgb(79, 70, 229)',
-                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                        tension: 0.1,
-                        fill: true
+                        label: 'Daily Growth (%)',
+                        data: growthValues,
+                        backgroundColor: barColors,
+                        borderColor: barColors.map(color => color.replace('0.8', '1')),
+                        borderWidth: 1
                     }]
                 },
                 options: {
@@ -414,7 +425,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    return `$${context.raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+                                    return `${context.raw.toFixed(2)}%`;
                                 }
                             }
                         }
@@ -424,7 +435,7 @@
                             beginAtZero: false,
                             title: {
                                 display: true,
-                                text: 'SV',
+                                text: 'Growth (%)',
                                 color: '#f0f0f0'
                             },
                             ticks: {
@@ -460,4 +471,6 @@
         }
     </script>
 </body>
+</html>
+
 </html>
