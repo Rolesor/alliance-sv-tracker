@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Alliance SV Daily Growth (Password Protected)</title>
+    <title>Alliance SV Daily Growth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.js"></script>
     <style>
@@ -16,8 +16,8 @@
             background-color: #000;
         }
         .main-container {
-            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black background */
-            color: #f0f0f0; /* Light text for readability */
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #f0f0f0;
         }
         .chart-container {
             position: relative;
@@ -39,7 +39,6 @@
             90% { opacity: 1; transform: translateY(0); }
             100% { opacity: 0; transform: translateY(-20px); }
         }
-        /* Style for form elements to make them readable on a dark background */
         .input-dark-bg {
             background-color: #1f2937;
             color: #f0f0f0;
@@ -48,7 +47,6 @@
         .input-dark-bg::placeholder {
             color: #9ca3af;
         }
-        /* Style for table */
         .table-dark-bg {
             background-color: #1f2937;
         }
@@ -87,31 +85,26 @@
             </form>
 
             <div id="inputForms" class="flex flex-col gap-6 mb-8 hidden">
-                <!-- Form to add a new total SV value -->
-                <form id="addSvForm" class="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gray-900 rounded-lg shadow-sm">
+                <form id="addDataForm" class="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gray-900 rounded-lg shadow-sm">
                     <div class="flex-grow flex items-center gap-2">
-                        <label for="svInput" class="text-gray-400">Add New SV Value ($):</label>
+                        <label for="dateInput" class="text-gray-400">Date:</label>
+                        <input type="date" id="dateInput" class="p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
+                    </div>
+                    <div class="flex-grow flex items-center gap-2">
+                        <label for="svInput" class="text-gray-400">SV ($):</label>
                         <input type="number" id="svInput" placeholder="e.g., 250.75" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
                     </div>
-                    <button type="submit" id="submitSvButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                        Add SV Entry
-                    </button>
-                </form>
-
-                <!-- Form to add a new dollar growth value -->
-                <form id="addGrowthForm" class="flex flex-col sm:flex-row items-center gap-4 p-4 bg-gray-900 rounded-lg shadow-sm">
                     <div class="flex-grow flex items-center gap-2">
-                        <label for="growthInput" class="text-gray-400">Add Daily Growth ($):</label>
-                        <input type="number" id="growthInput" placeholder="e.g., 2.50" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
+                        <label for="growthInput" class="text-gray-400">Growth ($):</label>
+                        <input type="number" id="growthInput" placeholder="e.g., 2.50" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg">
                     </div>
-                    <button type="submit" id="submitGrowthButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
-                        Add Growth Entry
+                    <button type="submit" id="submitButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                        Add Entry
                     </button>
                 </form>
             </div>
 
             <div class="flex flex-col md:flex-row md:space-x-6 gap-6 mb-8">
-                <!-- Chart for SV Growth -->
                 <div class="md:w-1/2">
                     <h2 class="text-2xl font-semibold text-white mb-4">Share Value</h2>
                     <div class="chart-container border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
@@ -134,7 +127,6 @@
                 <table class="min-w-full divide-y divide-gray-700 table-dark-bg">
                     <thead class="bg-gray-800 text-gray-400">
                         <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Day</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">SV ($)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Growth ($)</th>
@@ -145,22 +137,13 @@
                     </tbody>
                 </table>
             </div>
-            
-            <div id="toggleButtonContainer" class="mt-4 text-center hidden">
-                <button onclick="toggleAllEntries()" id="toggleButton" class="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition duration-150">
-                    Show All Entries
-                </button>
-            </div>
-            
-            <div id="averageGrowth" class="mt-4 p-4 bg-indigo-900 rounded-lg text-indigo-200 font-semibold text-center hidden">
-            </div>
 
             <footer class="mt-8 text-center text-xs text-gray-500">
                 Data is stored in a public, shared cloud database.
             </footer>
         </main>
     </div>
-    
+
     <div id="messageDialog" class="hidden dialog-box bg-red-100 text-red-700 border border-red-400">
         <p id="dialogMessage"></p>
     </div>
@@ -168,7 +151,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, collection, onSnapshot, addDoc, updateDoc, query, doc, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, collection, onSnapshot, addDoc, query, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firebase Global Variables
@@ -236,16 +219,8 @@
                         querySnapshot.forEach((doc) => {
                             fetchedData.push({ ...doc.data(), id: doc.id });
                         });
-
-                        const dailyDataMap = fetchedData.reduce((acc, curr) => {
-                            const dateKey = new Date(curr.timestamp).toLocaleDateString('en-US');
-                            acc[dateKey] = { ...acc[dateKey], ...curr };
-                            return acc;
-                        }, {});
-
-                        const combinedData = Object.values(dailyDataMap);
-                        combinedData.sort((a, b) => a.timestamp - b.timestamp);
-                        data = combinedData;
+                        fetchedData.sort((a, b) => a.timestamp - b.timestamp);
+                        data = fetchedData;
                         
                         renderTable(data, ownerAccess);
                         renderGrowthChart(data);
@@ -273,76 +248,40 @@
                 }
             });
             
-            document.getElementById('addSvForm').addEventListener('submit', async function(e) {
+            document.getElementById('addDataForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 if (!isAuthReady) {
                     showDialog("Authentication not ready. Please wait a moment.");
                     return;
                 }
+                const dateInput = document.getElementById('dateInput');
                 const svInput = document.getElementById('svInput');
-                const sv = parseFloat(svInput.value);
+                const growthInput = document.getElementById('growthInput');
 
+                const date = dateInput.value;
+                const sv = parseFloat(svInput.value);
+                const growth = growthInput.value ? parseFloat(growthInput.value) : null;
+                
                 if (isNaN(sv) || sv <= 0) {
                     showDialog("Please enter a valid positive number for the SV.");
                     return;
                 }
-                
-                const today = new Date().toLocaleDateString('en-US');
-                const existingDocQuery = query(dataCollection, where("date_string", "==", today));
-                const existingDocs = await getDocs(existingDocQuery);
 
-                if (!existingDocs.empty) {
-                    const docId = existingDocs.docs[0].id;
-                    await updateDoc(doc(dataCollection, docId), {
-                        sv: sv,
-                        timestamp: Date.now()
-                    });
-                    showDialog("SV value updated successfully!", false);
-                } else {
+                try {
                     await addDoc(dataCollection, {
-                        sv: sv,
-                        date_string: today,
+                        date,
+                        sv,
+                        growth,
                         timestamp: Date.now()
                     });
-                    showDialog("New SV value saved successfully!", false);
+                    showDialog("Entry saved successfully!", false);
+                    dateInput.value = '';
+                    svInput.value = '';
+                    growthInput.value = '';
+                } catch (e) {
+                    console.error("Error adding document: ", e);
+                    showDialog("Error saving data. Check console for details.");
                 }
-                svInput.value = '';
-            });
-
-            document.getElementById('addGrowthForm').addEventListener('submit', async function(e) {
-                e.preventDefault();
-                if (!isAuthReady) {
-                    showDialog("Authentication not ready. Please wait a moment.");
-                    return;
-                }
-                const growthInput = document.getElementById('growthInput');
-                const growth = parseFloat(growthInput.value);
-                
-                if (isNaN(growth)) {
-                    showDialog("Please enter a valid number for the growth amount.");
-                    return;
-                }
-
-                const today = new Date().toLocaleDateString('en-US');
-                const existingDocQuery = query(dataCollection, where("date_string", "==", today));
-                const existingDocs = await getDocs(existingDocQuery);
-
-                if (!existingDocs.empty) {
-                    const docId = existingDocs.docs[0].id;
-                    await updateDoc(doc(dataCollection, docId), {
-                        growth_amount: growth,
-                        timestamp: Date.now()
-                    });
-                    showDialog("Growth entry updated successfully!", false);
-                } else {
-                    await addDoc(dataCollection, {
-                        growth_amount: growth,
-                        date_string: today,
-                        timestamp: Date.now()
-                    });
-                    showDialog("New growth entry saved successfully!", false);
-                }
-                growthInput.value = '';
             });
             
             window.deleteDataPoint = async (id) => {
@@ -369,39 +308,20 @@
 
         function renderTable(dataToRender, canEdit) {
             const tableBody = document.getElementById('dataTableBody');
-            const toggleButtonContainer = document.getElementById('toggleButtonContainer');
             tableBody.innerHTML = '';
-            const averageGrowthDiv = document.getElementById('averageGrowth');
             
             const reversedData = [...dataToRender].reverse();
-            
-            const growthEntries = dataToRender.filter(item => typeof item.growth_amount === 'number');
-            
-            const totalGrowth = growthEntries.reduce((sum, item) => sum + item.growth_amount, 0);
-            const averageGrowth = growthEntries.length > 0 ? totalGrowth / growthEntries.length : 0;
-            
-            if (growthEntries.length > 0) {
-                 averageGrowthDiv.textContent = `Average Daily Growth: $${averageGrowth.toFixed(2)}`;
-                 averageGrowthDiv.classList.remove('hidden');
-            } else {
-                 averageGrowthDiv.classList.add('hidden');
-            }
 
-            reversedData.forEach((item, index) => {
+            reversedData.forEach((item) => {
                 const row = document.createElement('tr');
-                if (index >= 10) {
-                     row.classList.add('hidden-row', 'hidden');
-                }
                 row.className += ' divide-y divide-gray-700';
                 
                 const svText = typeof item.sv === 'number' ? `$${item.sv.toFixed(2)}` : 'N/A';
-                const growthText = typeof item.growth_amount === 'number' ? `$${item.growth_amount.toFixed(2)}` : 'N/A';
-                const growthColor = typeof item.growth_amount === 'number' ? (item.growth_amount >= 0 ? 'text-green-500' : 'text-red-500') : 'text-gray-400';
-                const formattedDate = item.date_string ? item.date_string : new Date(item.timestamp).toLocaleDateString();
+                const growthText = typeof item.growth === 'number' ? `$${item.growth.toFixed(2)}` : 'N/A';
+                const growthColor = typeof item.growth === 'number' ? (item.growth >= 0 ? 'text-green-500' : 'text-red-500') : 'text-gray-400';
 
                 row.innerHTML = `
-                    <td class="px-6 py-4 text-gray-200">${dataToRender.length - index}</td>
-                    <td class="px-6 py-4 text-gray-200">${formattedDate}</td>
+                    <td class="px-6 py-4 text-gray-200">${item.date}</td>
                     <td class="px-6 py-4 font-bold text-blue-400">${svText}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     ${canEdit ? `<td class="px-6 py-4 flex gap-2">
@@ -415,36 +335,14 @@
                 `;
                 tableBody.appendChild(row);
             });
-            
-            if (dataToRender.length > 10) {
-                 toggleButtonContainer.classList.remove('hidden');
-            } else {
-                 toggleButtonContainer.classList.add('hidden');
-            }
         }
-
-        window.toggleAllEntries = function() {
-            const hiddenRows = document.querySelectorAll('.hidden-row');
-            const toggleButton = document.getElementById('toggleButton');
-            const isHidden = hiddenRows[0]?.classList.contains('hidden');
-
-            hiddenRows.forEach(row => {
-                row.classList.toggle('hidden');
-            });
-
-            if (isHidden) {
-                toggleButton.textContent = "Hide Older Entries";
-            } else {
-                toggleButton.textContent = "Show All Entries";
-            }
-        };
 
         function renderGrowthChart(dataToRender) {
             const chartCanvas = document.getElementById('growthChart');
             const ctx = chartCanvas.getContext('2d');
             const messageDiv = document.getElementById('growthChartMessage');
             
-            const growthData = dataToRender.filter(item => typeof item.growth_amount === 'number');
+            const growthData = dataToRender.filter(item => typeof item.growth === 'number');
 
             if (growthData.length === 0) {
                 if (growthChart) {
@@ -458,12 +356,9 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
 
-            const labels = growthData.map(item => item.date_string);
-            const growthValues = growthData.map(item => item.growth_amount);
+            const labels = growthData.map(item => item.date);
+            const growthValues = growthData.map(item => item.growth);
             
-            let averageGrowth = growthValues.reduce((sum, value) => sum + value, 0) / growthValues.length;
-            const averageGrowthData = new Array(growthValues.length).fill(averageGrowth);
-
             if (growthChart) {
                 growthChart.destroy();
             }
@@ -479,14 +374,6 @@
                             borderColor: 'rgb(79, 70, 229)',
                             backgroundColor: 'rgba(79, 70, 229, 0.2)',
                             tension: 0.1,
-                            fill: false
-                        },
-                        {
-                            label: `Average Growth: $${averageGrowth.toFixed(2)}`,
-                            data: averageGrowthData,
-                            borderColor: 'rgb(245, 158, 11)',
-                            borderDash: [5, 5],
-                            pointRadius: 0,
                             fill: false
                         }
                     ]
@@ -504,11 +391,7 @@
                         tooltip: {
                             callbacks: {
                                 label: function(context) {
-                                    if (context.datasetIndex === 0) {
-                                        return `Daily Growth: $${context.raw.toFixed(2)}`;
-                                    } else {
-                                        return `Average Growth: $${context.raw.toFixed(2)}`;
-                                    }
+                                    return `Daily Growth: $${context.raw.toFixed(2)}`;
                                 }
                             }
                         }
@@ -544,11 +427,6 @@
                     }
                 }
             });
-            
-            const toggleButton = document.getElementById('toggleButton');
-            if (toggleButton.textContent === 'Hide Older Entries') {
-              window.toggleAllEntries();
-            }
         }
         
         function renderSvChart(dataToRender) {
@@ -570,7 +448,7 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
             
-            const labels = svData.map(item => item.date_string);
+            const labels = svData.map(item => item.date);
             const svValues = svData.map(item => item.sv);
             
             if (svChart) {
@@ -588,8 +466,7 @@
                             borderColor: 'rgb(59, 130, 246)',
                             backgroundColor: 'rgba(59, 130, 246, 0.2)',
                             tension: 0.1,
-                            fill: true,
-                            pointRadius: svData.length === 1 ? 5 : 3
+                            fill: true
                         }
                     ]
                 },
