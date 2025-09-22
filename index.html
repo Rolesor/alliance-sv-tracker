@@ -55,7 +55,7 @@
     </style>
 </head>
 <body class="font-sans antialiased flex flex-col items-center p-4 min-h-screen">
-    <div class="max-w-4xl w-full rounded-xl shadow-lg p-6 md:p-8 main-container">
+    <div class="max-w-6xl w-full rounded-xl shadow-lg p-6 md:p-8 main-container">
         <header class="text-center mb-6">
             <h1 class="text-3xl font-bold text-white">Alliance SV Daily Growth</h1>
             <p class="text-gray-400 mt-2">Track your daily Share Value (SV) and visualize its growth.</p>
@@ -77,26 +77,39 @@
                 </button>
             </form>
 
-            <form id="svForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-900 rounded-lg shadow-sm hidden">
+            <!-- Conditional Forms for SV Entry -->
+            <form id="initialSvForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-900 rounded-lg shadow-sm hidden">
+                <input type="number" id="initialSvInput" placeholder="Enter starting SV (e.g., 226.07)" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
+                <button type="submit" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                    Set Initial SV
+                </button>
+            </form>
+
+            <form id="growthForm" class="flex flex-col sm:flex-row items-center gap-4 mb-8 p-4 bg-gray-900 rounded-lg shadow-sm hidden">
                 <div class="flex-grow flex items-center gap-2">
-                    <label for="dateInput" class="text-gray-400">Date:</label>
-                    <input type="date" id="dateInput" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
+                    <label for="growthPercentInput" class="text-gray-400">Daily Growth %:</label>
+                    <input type="number" id="growthPercentInput" placeholder="Enter daily growth %" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
                 </div>
-                <input type="number" id="svInput" placeholder="Enter SV (e.g., 1500.25)" step="0.01" class="flex-grow p-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 input-dark-bg" required>
-                <button type="submit" id="submitButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
+                <button type="submit" id="submitGrowthButton" class="w-full sm:w-auto px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg shadow-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
                     Add Day
                 </button>
             </form>
-            
-            <!-- New Chart for SV Growth -->
-            <h2 class="text-2xl font-semibold text-white mb-4">Share Value Growth</h2>
-            <div class="chart-container mb-8 border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
-                <canvas id="svChart"></canvas>
-            </div>
 
-            <h2 class="text-2xl font-semibold text-white mb-4">Daily Growth Rate</h2>
-            <div class="chart-container mb-8 border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
-                <canvas id="growthChart"></canvas>
+            <div class="flex flex-col md:flex-row md:space-x-6 gap-6 mb-8">
+                <!-- New Chart for SV Growth -->
+                <div class="md:w-1/2">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Share Value Growth</h2>
+                    <div class="chart-container border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
+                        <canvas id="svChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="md:w-1/2">
+                    <h2 class="text-2xl font-semibold text-white mb-4">Daily Growth Rate</h2>
+                    <div class="chart-container border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
+                        <canvas id="growthChart"></canvas>
+                    </div>
+                </div>
             </div>
 
             <h2 class="text-2xl font-semibold text-white mb-4">Historical Data</h2>
@@ -208,12 +221,25 @@
                             fetchedData.push({ ...doc.data(), id: doc.id });
                         });
 
-                        fetchedData.sort((a, b) => b.timestamp - a.timestamp); // Change: Sort descending
+                        fetchedData.sort((a, b) => a.timestamp - b.timestamp); // Sort by date ascending
                         data = fetchedData;
                         
                         renderTable(data, ownerAccess);
                         renderGrowthChart(data);
                         renderSvChart(data);
+                        
+                        // Show/hide forms based on data
+                        const initialSvForm = document.getElementById('initialSvForm');
+                        const growthForm = document.getElementById('growthForm');
+                        if (ownerAccess) {
+                            if (data.length === 0) {
+                                initialSvForm.classList.remove('hidden');
+                                growthForm.classList.add('hidden');
+                            } else {
+                                initialSvForm.classList.add('hidden');
+                                growthForm.classList.remove('hidden');
+                            }
+                        }
                     }, (error) => {
                         console.error("Error fetching data: ", error);
                         showDialog("Error loading data. Check console for details.");
@@ -228,56 +254,88 @@
                 if (passwordInput === SECURITY_WORD) {
                     ownerAccess = true;
                     document.getElementById('passwordForm').classList.add('hidden');
-                    document.getElementById('svForm').classList.remove('hidden');
                     document.getElementById('actionsHeader').classList.remove('hidden');
                     renderTable(data, ownerAccess);
+                    
+                    const initialSvForm = document.getElementById('initialSvForm');
+                    const growthForm = document.getElementById('growthForm');
+                    if (data.length === 0) {
+                        initialSvForm.classList.remove('hidden');
+                        growthForm.classList.add('hidden');
+                    } else {
+                        initialSvForm.classList.add('hidden');
+                        growthForm.classList.remove('hidden');
+                    }
                     showDialog("Access granted!", false);
                 } else {
                     showDialog("Incorrect security word. Access denied.");
                 }
             });
-
-            document.getElementById('svForm').addEventListener('submit', async function(e) {
+            
+            document.getElementById('initialSvForm').addEventListener('submit', async function(e) {
                 e.preventDefault();
                 if (!isAuthReady) {
                     showDialog("Authentication not ready. Please wait a moment.");
                     return;
                 }
-                const svInput = document.getElementById('svInput');
-                const dateInput = document.getElementById('dateInput');
-                const sv = parseFloat(svInput.value);
-                const selectedDate = new Date(dateInput.value);
+                const initialSvInput = document.getElementById('initialSvInput');
+                const sv = parseFloat(initialSvInput.value);
 
                 if (isNaN(sv) || sv <= 0) {
-                    showDialog("Please enter a valid positive number for the SV.");
+                    showDialog("Please enter a valid positive number for the starting SV.");
                     return;
                 }
-
-                if (isNaN(selectedDate.getTime())) {
-                    showDialog("Please select a valid date.");
-                    return;
-                }
-
+                
                 const newDataPoint = {
                     sv: sv,
-                    date: selectedDate.toISOString(),
-                    timestamp: selectedDate.getTime()
+                    date: new Date().toISOString(),
+                    timestamp: Date.now()
                 };
 
                 try {
-                    if (docToEditId) {
-                        await updateDoc(doc(dataCollection, docToEditId), newDataPoint);
-                        showDialog("Entry updated successfully!", false);
-                    } else {
-                        await addDoc(dataCollection, newDataPoint);
-                        showDialog("Entry added successfully!", false);
-                    }
-                    svInput.value = '';
-                    dateInput.value = '';
-                    docToEditId = null;
-                    document.getElementById('submitButton').textContent = 'Add Day';
+                    await addDoc(dataCollection, newDataPoint);
+                    initialSvInput.value = '';
+                    showDialog("Initial SV saved successfully!", false);
                 } catch (e) {
-                    console.error("Error adding/updating document: ", e);
+                    console.error("Error adding initial document: ", e);
+                    showDialog("Error saving initial data. Check console for details.");
+                }
+            });
+
+            document.getElementById('growthForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                if (!isAuthReady) {
+                    showDialog("Authentication not ready. Please wait a moment.");
+                    return;
+                }
+                const growthPercentInput = document.getElementById('growthPercentInput');
+                const growth = parseFloat(growthPercentInput.value);
+                
+                if (isNaN(growth)) {
+                    showDialog("Please enter a valid number for the growth percentage.");
+                    return;
+                }
+
+                if (data.length === 0) {
+                    showDialog("Please set the initial Share Value first.");
+                    return;
+                }
+                
+                const latestSv = data[data.length - 1].sv;
+                const nextSv = latestSv * (1 + growth / 100);
+                
+                const newDataPoint = {
+                    sv: nextSv,
+                    date: new Date().toISOString(),
+                    timestamp: Date.now()
+                };
+
+                try {
+                    await addDoc(dataCollection, newDataPoint);
+                    growthPercentInput.value = '';
+                    showDialog("New day added successfully!", false);
+                } catch (e) {
+                    console.error("Error adding document: ", e);
                     showDialog("Error saving data. Check console for details.");
                 }
             });
@@ -297,14 +355,7 @@
             };
 
             window.editDataPoint = (id) => {
-                const item = data.find(d => d.id === id);
-                if (item) {
-                    docToEditId = id;
-                    document.getElementById('svInput').value = item.sv;
-                    document.getElementById('dateInput').value = item.date.split('T')[0];
-                    document.getElementById('submitButton').textContent = 'Update Day';
-                    showDialog("Editing entry...", false);
-                }
+                showDialog("You can't edit entries when using automated growth. Please delete and re-add.", true);
             };
         } catch (error) {
             console.error("Firebase initialization failed:", error);
@@ -317,9 +368,10 @@
             tableBody.innerHTML = '';
             const averageGrowthDiv = document.getElementById('averageGrowth');
             
-            const dataWithGrowth = dataToRender.map((item, index, array) => {
+            const reversedData = [...dataToRender].reverse();
+            
+            const dataWithGrowth = reversedData.map((item, index, array) => {
                 let growth = 0;
-                // Calculate growth based on the previous element in the now-reversed array.
                 if (index < array.length - 1) {
                     const prevSv = array[index + 1].sv;
                     growth = ((item.sv - prevSv) / prevSv) * 100;
@@ -329,7 +381,6 @@
 
             dataWithGrowth.forEach((item, index) => {
                 const row = document.createElement('tr');
-                // Hide rows after the 10th one by default
                 if (index >= 10) {
                      row.classList.add('hidden-row', 'hidden');
                 }
@@ -391,11 +442,10 @@
         function renderGrowthChart(dataToRender) {
             const ctx = document.getElementById('growthChart').getContext('2d');
             
-            // Calculate growth percentages
             const dataWithGrowth = dataToRender.map((item, index, array) => {
                 let growth = 0;
-                if (index < array.length - 1) {
-                    const prevSv = array[index + 1].sv;
+                if (index > 0) {
+                    const prevSv = array[index - 1].sv;
                     growth = ((item.sv - prevSv) / prevSv) * 100;
                 }
                 return { ...item, growth_percentage: growth };
@@ -406,7 +456,7 @@
             
             let averageGrowth = 0;
             if (growthValues.length > 1) {
-                const totalGrowth = growthValues.slice(0, growthValues.length - 1).reduce((sum, value) => sum + value, 0);
+                const totalGrowth = growthValues.slice(1).reduce((sum, value) => sum + value, 0);
                 averageGrowth = totalGrowth / (growthValues.length - 1);
             }
             
@@ -487,14 +537,12 @@
                             },
                             grid: {
                                 color: '#4b5563'
-                            },
-                            reverse: true
+                            }
                         }
                     }
                 }
             });
             
-            // To show the entire table when the chart is rendered
             const toggleButton = document.getElementById('toggleButton');
             if (toggleButton.textContent === 'Hide Older Entries') {
               window.toggleAllEntries();
@@ -504,8 +552,8 @@
         function renderSvChart(dataToRender) {
             const ctx = document.getElementById('svChart').getContext('2d');
             
-            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString()).reverse();
-            const svValues = dataToRender.map(item => item.sv).reverse();
+            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
+            const svValues = dataToRender.map(item => item.sv);
             
             if (svChart) {
                 svChart.destroy();
@@ -580,4 +628,3 @@
 </body>
 </html>
 
-</html>
