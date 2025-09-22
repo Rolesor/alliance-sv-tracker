@@ -129,7 +129,7 @@
                 </div>
             </div>
 
-            <h2 class="text-2xl font-semibold text-white mb-4">Historical Data</h2>
+            <h2 class="text-2xl font-semibold text-white mb-4">Historical Data (SV values under Growth and vice-versa)</h2>
             <div class="overflow-x-auto rounded-lg shadow-sm border border-gray-700">
                 <table class="min-w-full divide-y divide-gray-700 table-dark-bg">
                     <thead class="bg-gray-800 text-gray-400">
@@ -383,8 +383,8 @@
                 row.innerHTML = `
                     <td class="px-6 py-4 text-gray-200">${dataToRender.length - index}</td>
                     <td class="px-6 py-4 text-gray-200">${formattedDate}</td>
-                    <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
-                    <td class="px-6 py-4 font-bold text-blue-400">${svText}</td>
+                    <td class="px-6 py-4 font-bold ${growthColor}">${svText}</td>
+                    <td class="px-6 py-4 font-bold text-blue-400">${growthText}</td>
                     ${canEdit ? `<td class="px-6 py-4 flex gap-2">
                         <button onclick="editDataPoint('${item.id}')" class="text-indigo-400 hover:text-indigo-200 font-semibold focus:outline-none">
                             Edit
