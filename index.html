@@ -113,10 +113,10 @@
             <div class="flex flex-col md:flex-row md:space-x-6 gap-6 mb-8">
                 <!-- Chart for SV Growth -->
                 <div class="md:w-1/2">
-                    <h2 class="text-2xl font-semibold text-white mb-4">Share Value Growth</h2>
+                    <h2 class="text-2xl font-semibold text-white mb-4">Share Value</h2>
                     <div class="chart-container border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
                         <canvas id="svChart"></canvas>
-                        <div id="svChartMessage" class="chart-message hidden">Enter a starting SV to begin tracking.</div>
+                        <div id="svChartMessage" class="chart-message hidden">Enter an SV value to begin tracking.</div>
                     </div>
                 </div>
 
@@ -124,7 +124,7 @@
                     <h2 class="text-2xl font-semibold text-white mb-4">Daily Growth Rate</h2>
                     <div class="chart-container border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
                         <canvas id="growthChart"></canvas>
-                        <div id="growthChartMessage" class="chart-message hidden">Add at least two entries to see the daily growth trend.</div>
+                        <div id="growthChartMessage" class="chart-message hidden">Add at least one daily growth entry to see the trend.</div>
                     </div>
                 </div>
             </div>
@@ -136,6 +136,7 @@
                         <tr>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Day</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Date</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">SV ($)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider">Growth ($)</th>
                             <th id="actionsHeader" scope="col" class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider hidden">Actions</th>
                         </tr>
@@ -146,7 +147,7 @@
             </div>
             
             <div id="toggleButtonContainer" class="mt-4 text-center hidden">
-                <button id="toggleButton" class="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition duration-150">
+                <button onclick="toggleAllEntries()" id="toggleButton" class="px-4 py-2 bg-gray-700 text-white font-semibold rounded-lg hover:bg-gray-600 transition duration-150">
                     Show All Entries
                 </button>
             </div>
@@ -308,17 +309,9 @@
                     showDialog("Please enter a valid number for the growth amount.");
                     return;
                 }
-
-                if (data.length === 0) {
-                    showDialog("Please add a starting SV value first.");
-                    return;
-                }
-                
-                const latestSv = data[data.length - 1].sv;
-                const nextSv = latestSv + growth;
                 
                 const newDataPoint = {
-                    sv: nextSv,
+                    growth_amount: growth,
                     date: new Date().toISOString(),
                     timestamp: Date.now()
                 };
@@ -326,7 +319,7 @@
                 try {
                     await addDoc(dataCollection, newDataPoint);
                     growthInput.value = '';
-                    showDialog("New day added successfully!", false);
+                    showDialog("New growth entry saved successfully!", false);
                 } catch (e) {
                     console.error("Error adding document: ", e);
                     showDialog("Error saving data. Check console for details.");
@@ -363,29 +356,34 @@
             
             const reversedData = [...dataToRender].reverse();
             
-            const dataWithGrowth = reversedData.map((item, index, array) => {
-                let growth = 0;
-                if (index < array.length - 1) {
-                    const prevSv = array[index + 1].sv;
-                    growth = item.sv - prevSv;
-                }
-                return { ...item, growth_amount: growth };
-            });
+            const growthEntries = dataToRender.filter(item => typeof item.growth_amount === 'number');
+            
+            const totalGrowth = growthEntries.reduce((sum, item) => sum + item.growth_amount, 0);
+            const averageGrowth = growthEntries.length > 0 ? totalGrowth / growthEntries.length : 0;
+            
+            if (growthEntries.length > 0) {
+                 averageGrowthDiv.textContent = `Average Daily Growth: $${averageGrowth.toFixed(2)}`;
+                 averageGrowthDiv.classList.remove('hidden');
+            } else {
+                 averageGrowthDiv.classList.add('hidden');
+            }
 
-            dataWithGrowth.forEach((item, index) => {
+            reversedData.forEach((item, index) => {
                 const row = document.createElement('tr');
                 if (index >= 10) {
                      row.classList.add('hidden-row', 'hidden');
                 }
                 row.className += ' divide-y divide-gray-700';
                 
-                const growthText = index === dataToRender.length - 1 ? 'N/A' : `$${item.growth_amount.toFixed(2)}`;
-                const growthColor = index === dataToRender.length - 1 ? 'text-gray-400' : (item.growth_amount >= 0 ? 'text-green-500' : 'text-red-500');
+                const svText = typeof item.sv === 'number' ? `$${item.sv.toFixed(2)}` : 'N/A';
+                const growthText = typeof item.growth_amount === 'number' ? `$${item.growth_amount.toFixed(2)}` : 'N/A';
+                const growthColor = typeof item.growth_amount === 'number' ? (item.growth_amount >= 0 ? 'text-green-500' : 'text-red-500') : 'text-gray-400';
                 const formattedDate = new Date(item.date).toLocaleDateString();
 
                 row.innerHTML = `
                     <td class="px-6 py-4 text-gray-200">${dataToRender.length - index}</td>
                     <td class="px-6 py-4 text-gray-200">${formattedDate}</td>
+                    <td class="px-6 py-4 font-bold text-blue-400">${svText}</td>
                     <td class="px-6 py-4 font-bold ${growthColor}">${growthText}</td>
                     ${canEdit ? `<td class="px-6 py-4 flex gap-2">
                         <button onclick="editDataPoint('${item.id}')" class="text-indigo-400 hover:text-indigo-200 font-semibold focus:outline-none">
@@ -403,15 +401,6 @@
                  toggleButtonContainer.classList.remove('hidden');
             } else {
                  toggleButtonContainer.classList.add('hidden');
-            }
-            
-            if (dataToRender.length > 1) {
-                const totalGrowth = dataWithGrowth.slice(0, dataWithGrowth.length - 1).reduce((sum, item) => sum + item.growth_amount, 0);
-                const averageGrowth = totalGrowth / (dataToRender.length - 1);
-                averageGrowthDiv.textContent = `Average Daily Growth: $${averageGrowth.toFixed(2)}`;
-                averageGrowthDiv.classList.remove('hidden');
-            } else {
-                averageGrowthDiv.classList.add('hidden');
             }
         }
 
@@ -436,7 +425,9 @@
             const ctx = chartCanvas.getContext('2d');
             const messageDiv = document.getElementById('growthChartMessage');
             
-            if (dataToRender.length < 2) {
+            const growthData = dataToRender.filter(item => typeof item.growth_amount === 'number');
+
+            if (growthData.length === 0) {
                 if (growthChart) {
                     growthChart.destroy();
                 }
@@ -448,24 +439,10 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
 
-            const dataWithGrowth = dataToRender.map((item, index, array) => {
-                let growth = 0;
-                if (index > 0) {
-                    const prevSv = array[index - 1].sv;
-                    growth = item.sv - prevSv;
-                }
-                return { ...item, growth_amount: growth };
-            });
-
-            const labels = dataWithGrowth.map(item => new Date(item.date).toLocaleDateString());
-            const growthValues = dataWithGrowth.map(item => item.growth_amount);
+            const labels = growthData.map(item => new Date(item.date).toLocaleDateString());
+            const growthValues = growthData.map(item => item.growth_amount);
             
-            let averageGrowth = 0;
-            if (growthValues.length > 1) {
-                const totalGrowth = growthValues.slice(1).reduce((sum, value) => sum + value, 0);
-                averageGrowth = totalGrowth / (growthValues.length - 1);
-            }
-            
+            let averageGrowth = growthValues.reduce((sum, value) => sum + value, 0) / growthValues.length;
             const averageGrowthData = new Array(growthValues.length).fill(averageGrowth);
 
             if (growthChart) {
@@ -560,7 +537,9 @@
             const ctx = chartCanvas.getContext('2d');
             const messageDiv = document.getElementById('svChartMessage');
             
-            if (dataToRender.length === 0) {
+            const svData = dataToRender.filter(item => typeof item.sv === 'number');
+
+            if (svData.length === 0) {
                 if (svChart) {
                     svChart.destroy();
                 }
@@ -572,8 +551,8 @@
             chartCanvas.style.display = 'block';
             messageDiv.classList.add('hidden');
             
-            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString());
-            const svValues = dataToRender.map(item => item.sv);
+            const labels = svData.map(item => new Date(item.date).toLocaleDateString());
+            const svValues = svData.map(item => item.sv);
             
             if (svChart) {
                 svChart.destroy();
@@ -591,7 +570,7 @@
                             backgroundColor: 'rgba(59, 130, 246, 0.2)',
                             tension: 0.1,
                             fill: true,
-                            pointRadius: dataToRender.length === 1 ? 5 : 3
+                            pointRadius: svData.length === 1 ? 5 : 3
                         }
                     ]
                 },
