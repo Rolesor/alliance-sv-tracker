@@ -87,7 +87,14 @@
                     Add Day
                 </button>
             </form>
+            
+            <!-- New Chart for SV Growth -->
+            <h2 class="text-2xl font-semibold text-white mb-4">Share Value Growth</h2>
+            <div class="chart-container mb-8 border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
+                <canvas id="svChart"></canvas>
+            </div>
 
+            <h2 class="text-2xl font-semibold text-white mb-4">Daily Growth Rate</h2>
             <div class="chart-container mb-8 border border-gray-700 rounded-lg p-4 bg-gray-900 shadow-sm">
                 <canvas id="growthChart"></canvas>
             </div>
@@ -147,6 +154,7 @@
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
         
         let growthChart;
+        let svChart;
         let data = [];
         let db, auth;
         let dataCollection;
@@ -204,7 +212,8 @@
                         data = fetchedData;
                         
                         renderTable(data, ownerAccess);
-                        renderChart(data);
+                        renderGrowthChart(data);
+                        renderSvChart(data);
                     }, (error) => {
                         console.error("Error fetching data: ", error);
                         showDialog("Error loading data. Check console for details.");
@@ -379,7 +388,7 @@
             }
         };
 
-        function renderChart(dataToRender) {
+        function renderGrowthChart(dataToRender) {
             const ctx = document.getElementById('growthChart').getContext('2d');
             
             // Calculate growth percentages
@@ -408,7 +417,7 @@
             }
 
             growthChart = new Chart(ctx, {
-                type: 'line', // Back to 'line'
+                type: 'line',
                 data: {
                     labels: labels,
                     datasets: [
@@ -490,6 +499,82 @@
             if (toggleButton.textContent === 'Hide Older Entries') {
               window.toggleAllEntries();
             }
+        }
+        
+        function renderSvChart(dataToRender) {
+            const ctx = document.getElementById('svChart').getContext('2d');
+            
+            const labels = dataToRender.map(item => new Date(item.date).toLocaleDateString()).reverse();
+            const svValues = dataToRender.map(item => item.sv).reverse();
+            
+            if (svChart) {
+                svChart.destroy();
+            }
+
+            svChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Share Value ($)',
+                            data: svValues,
+                            borderColor: 'rgb(59, 130, 246)',
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            tension: 0.1,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                color: '#f0f0f0'
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `SV: $${context.raw.toFixed(2)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: 'Share Value ($)',
+                                color: '#f0f0f0'
+                            },
+                            ticks: {
+                                color: '#f0f0f0'
+                            },
+                            grid: {
+                                color: '#4b5563'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Date',
+                                color: '#f0f0f0'
+                            },
+                            ticks: {
+                                color: '#f0f0f0'
+                            },
+                            grid: {
+                                color: '#4b5563'
+                            }
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>
